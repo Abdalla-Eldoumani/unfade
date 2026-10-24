@@ -231,6 +231,7 @@ class World {
       space: this.mode,
       memoryId: this.memory.spec?.id,
       toWorld: (arr) => new THREE.Vector3(...arr).applyMatrix4(space.matrixWorld),
+      viewer: head.position,
       ignoreRoles: ['mirror', 'guide', 'studio'],
       // the mirror looks out of its target's eyes, so it must not draw them
       ignoreIds: IS_MIRROR && this.mirrorTarget ? [this.mirrorTarget] : [],
