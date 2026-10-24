@@ -147,13 +147,19 @@ export function memoryMaterial(photo, { aspect, palette }) {
 // belongs to it. Behind the photo it matches the photo's own look (faded or
 // back), so the gaps at depth edges read as soft focus, not cracks.
 // uBloom should be the memory material's own uniform, shared.
-export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, bloom }) {
+// plate, if given, is the background plate (depth-mesh.js): shown through the
+// gaps instead of the photo once the head moves.
+export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, bloom, plate = null }) {
+  const plateDim = plate ? Math.max(plate.image.width, plate.image.height) : 1;
   return new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
-    defines: { HAZE_DETAIL, GAP_BLUR: GAP_BLUR.toFixed(2) },
+    defines: { HAZE_DETAIL, GAP_BLUR: GAP_BLUR.toFixed(2), GAP_FILL: plate ? 1 : 0 },
     uniforms: {
       uPhoto: { value: photo },
+      uPlate: { value: plate },
+      // the same blur on the smaller plate is that many fewer levels
+      uPlateShift: { value: Math.max(0, Math.log2((maxDim || 512) / plateDim)) },
       // an explicit mip level: past the photo's edge the uv is clamped, so
       // automatic level selection would pick the sharpest level and streak
       uLod: { value: Math.max(1, Math.log2(maxDim || 512) - 3.2) },
@@ -179,6 +185,8 @@ export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, blo
     `,
     fragmentShader: /* glsl */ `
       uniform sampler2D uPhoto;
+      uniform sampler2D uPlate;
+      uniform float uPlateShift;
       uniform float uLod;
       uniform vec2 uTan;
       uniform vec3 uBase;
@@ -205,8 +213,13 @@ export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, blo
           inside = 1.0 - clamp(length(outside) * 3.0, 0.0, 1.0);
           float w = exp(-length(outside) * 1.4) * smoothstep(-0.02, -0.4, d.z);
           // behind the photo, the same blur the faded photo has; further out, all the way
-          float lod = mix(uLod + 1.0, mix(2.5, uLod, GAP_BLUR * smoothstep(0.03, 0.2, vLean)), inside);
+          float lean = smoothstep(0.03, 0.2, vLean);
+          float lod = mix(uLod + 1.0, mix(2.5, uLod, GAP_BLUR * lean), inside);
           vec3 c = textureLod(uPhoto, clamp(uv, 0.0, 1.0), lod).rgb;
+          #if GAP_FILL
+          vec3 behind = textureLod(uPlate, clamp(uv, 0.0, 1.0), max(0.0, lod - uPlateShift)).rgb;
+          c = mix(c, behind, inside * lean);
+          #endif
           col = mix(uBase, c * mix(0.75, 1.0, inside), w);
           #if HAZE_DETAIL > 1
           local = mix(uVivid, bloomAt(clamp(uv, 0.0, 1.0), uCore), inside);
