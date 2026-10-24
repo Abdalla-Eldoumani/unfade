@@ -55,6 +55,16 @@ async function frames(page, n) {
   return until(page, ([f0, n]) => window.unfade.stage.renderer.info.render.frame >= f0 + n, [f0, n], 20000);
 }
 
+// What the ?debug readout shows for the frame just drawn (both eyes): these
+// carry over to the Quest, unlike the frame time here.
+async function draws(page, where) {
+  const text = await page.evaluate(() => {
+    const r = window.unfade.stage.renderer.info.render;
+    return `${r.calls} calls, ${r.triangles.toLocaleString('en-US')} triangles`;
+  });
+  console.log(`note  ${where}, both eyes: ${text}`);
+}
+
 async function snap(page, name) {
   shot += 1;
   await page.screenshot({ path: join(SHOTS, `${String(shot).padStart(2, '0')}-${name}.png`) });
@@ -119,8 +129,10 @@ async function playOne(page, index) {
   await page.evaluate(() => window.__xr.controllers.right.position.set(0, 1.55, -0.12));
   const inside = await until(page, (id) => window.unfade.mode === 'memory' && window.unfade.memory.spec?.id === id, id, 20000);
   if (!report(inside, 'holding it to the eyes steps inside')) return;
-  await until(page, () => window.unfade.memory.anchors.length > 0, null, 10000);
+  // once the fade in is over, so the fade itself is not counted
+  await until(page, () => window.unfade.memory.anchors.length > 0 && !window.unfade.busy, null, 20000);
   await frames(page, 3);
+  await draws(page, `inside ${id}`);
   await snap(page, `${id}-inside`);
 
   const points = await page.evaluate(() =>
@@ -176,6 +188,7 @@ try {
       const line = await page.evaluate(() => window.unfade.readout?.text.split('\n')[0] ?? '');
       report(shown && / ms, worst .* calls .* triangles/.test(line), 'the debug readout shows frame time, draw calls and the last error', line);
       await frames(page, 2);
+      await draws(page, 'darkroom');
       await snap(page, 'darkroom');
       const ids = await page.evaluate(() => window.unfade.hub.prints.map((p) => p.item.spec.id));
       for (const id of SAMPLES) {
