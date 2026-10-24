@@ -386,8 +386,11 @@ class World {
     print.setOnTop(false);
     print.group.scale.setScalar(1);
     this.hub.giveBack(print);
+    // straight onto its peg, not falling from where the rise left it
+    print.group.position.copy(print.slot);
     this.held = null;
     if (!loaded) {
+      this.desk.setMode('look');
       await this.fadeTo(0, 0.4);
       this.busy = false;
       return;
