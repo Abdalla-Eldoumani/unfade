@@ -4,9 +4,11 @@ import { DEPTH_RANGE_M, fieldOfView } from '../shared/contract.js';
 // Grid cells along the photo's long edge: about 2 x SEGMENTS^2 / aspect
 // triangles. The third lever if the headset drops frames: 160 is the first step down.
 const SEGMENTS = 220;
-// How far the background plate looks (depth-map pixels) for what is behind an
-// edge, and how much farther (log depth) a pixel must be to count as behind.
-const PLATE_RADIUS = 20;
+// The background plate: its long edge in pixels (the haze only ever samples
+// it heavily blurred), the head movement whose gaps it must reach behind, and
+// how much farther (log depth) a pixel must be to count as behind.
+const PLATE_SIZE = 160;
+const PLATE_LEAN_M = 0.2;
 const PLATE_STEP = 0.1;
 
 // Turns a photo plus its depth map into a grid of triangles, as if every
@@ -90,54 +92,69 @@ export function buildDepthMesh(spec, depth, { segments = SEGMENTS } = {}) {
   return { geometry, pointAt, zAt, tanH, tanV, aspect, near, far };
 }
 
-// The photo at the depth map's size, with every pixel on the near side of a
-// depth edge taking the colour of the farthest pixel within PLATE_RADIUS: a
-// guess at what the nearer thing hides. The haze shows it through the gaps
-// that open at depth edges when the head moves. Drawn into canvas.
-export function backgroundPlate(spec, image, depth, canvas) {
-  const { width: w, height: h, data } = depth;
+// The photo, small, with the background across every depth edge grown in
+// over the nearer side, one pixel a pass: a guess at what the nearer thing
+// hides. The haze shows it through the gaps that open at depth edges when the
+// head moves. Drawn into canvas.
+export function backgroundPlate(spec, image, depth, canvas, tanH) {
   const [near, far] = DEPTH_RANGE_M[spec.scene.scale];
+  const [w, h] = plateSize(depth);
   const logZ = new Float32Array(w * h);
-  for (let i = 0; i < w * h; i++) logZ[i] = -Math.log(data[i] * (1 / near - 1 / far) + 1 / far);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const d = sampleDepth(depth, (x + 0.5) / w, (y + 0.5) / h);
+      logZ[y * w + x] = -Math.log(d * (1 / near - 1 / far) + 1 / far);
+    }
+  }
   canvas.width = w;
   canvas.height = h;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   ctx.drawImage(image, 0, 0, w, h);
   const img = ctx.getImageData(0, 0, w, h);
-  const src = img.data.slice();
-  const r = PLATE_RADIUS;
-  // the farthest pixel in the square around each one: rows first, then columns
-  const rowFar = new Float32Array(w * h);
-  const rowAt = new Int32Array(w * h);
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      let best = -Infinity;
-      let at = 0;
-      for (let k = Math.max(0, x - r), end = Math.min(w - 1, x + r); k <= end; k++) {
-        if (logZ[y * w + k] > best) {
-          best = logZ[y * w + k];
-          at = y * w + k;
-        }
-      }
-      rowFar[y * w + x] = best;
-      rowAt[y * w + x] = at;
-    }
-  }
-  for (let x = 0; x < w; x++) {
+  // a head moved PLATE_LEAN_M opens gaps reaching lean x (1/near - 1/far)
+  // tan units inside the nearer thing; that many plate pixels, one per pass
+  const passes = Math.ceil((PLATE_LEAN_M * (1 / near - 1 / far) * w) / (2 * tanH));
+  // each pixel's colour, and how far away the thing it now shows is
+  let rgb = img.data.slice();
+  let shownZ = logZ.slice();
+  for (let pass = 0; pass < passes; pass++) {
+    const nextRgb = rgb.slice();
+    const nextZ = shownZ.slice();
+    let grown = 0;
     for (let y = 0; y < h; y++) {
-      let best = -Infinity;
-      let at = 0;
-      for (let k = Math.max(0, y - r), end = Math.min(h - 1, y + r); k <= end; k++) {
-        if (rowFar[k * w + x] > best) {
-          best = rowFar[k * w + x];
-          at = rowAt[k * w + x];
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        // the mean of the neighbours that show something clearly farther away
+        let n = 0;
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        let z = shownZ[i];
+        for (const j of [x > 0 ? i - 1 : -1, x < w - 1 ? i + 1 : -1, y > 0 ? i - w : -1, y < h - 1 ? i + w : -1]) {
+          if (j < 0 || shownZ[j] - shownZ[i] <= PLATE_STEP) continue;
+          n++;
+          r += rgb[j * 4];
+          g += rgb[j * 4 + 1];
+          b += rgb[j * 4 + 2];
+          z = Math.max(z, shownZ[j]);
         }
+        if (!n) continue;
+        nextRgb.set([r / n, g / n, b / n], i * 4);
+        nextZ[i] = z;
+        grown++;
       }
-      const i = y * w + x;
-      if (best - logZ[i] > PLATE_STEP) img.data.set(src.subarray(at * 4, at * 4 + 4), i * 4);
     }
+    rgb = nextRgb;
+    shownZ = nextZ;
+    if (!grown) break;
   }
+  img.data.set(rgb);
   ctx.putImageData(img, 0, 0);
+}
+
+export function plateSize(depth) {
+  const scale = PLATE_SIZE / Math.max(depth.width, depth.height);
+  return [Math.max(2, Math.round(depth.width * scale)), Math.max(2, Math.round(depth.height * scale))];
 }
 
 // Bilinear sample of the depth map at (u, v), v = 0 at the top.
