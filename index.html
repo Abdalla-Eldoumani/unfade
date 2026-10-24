@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0c0907" />
+    <meta name="description" content="Shake a faded photo. Step back inside it." />
+    <title>Unfade</title>
+  </head>
+  <body>
+    <main class="landing">
+      <header class="masthead">
+        <h1 class="brand" data-brand>Unfade</h1>
+        <p class="tagline" data-tagline>Shake a faded photo. Step back inside it.</p>
+      </header>
+
+      <section class="sheet" aria-label="Where to go">
+        <ol class="strip">
+          <li class="frame" data-href="world.html">
+            <span class="edge frame-num">→ 1</span>
+            <span class="frame-img"></span>
+            <a class="frame-label" href="world.html">Step inside</a>
+            <span class="frame-note">Quest, laptop, or phone</span>
+          </li>
+          <li class="frame" data-href="studio.html">
+            <span class="edge frame-num">→ 2</span>
+            <span class="frame-img"></span>
+            <a class="frame-label" href="studio.html">Make a memory</a>
+            <span class="frame-note">From one photo</span>
+          </li>
+          <li class="frame" data-href="guide.html">
+            <span class="edge frame-num">→ 3</span>
+            <span class="frame-img"></span>
+            <a class="frame-label" href="guide.html">Remember together</a>
+            <span class="frame-note">Beside the headset</span>
+          </li>
+          <li class="frame" data-href="world.html?mirror">
+            <span class="edge frame-num">→ 4</span>
+            <span class="frame-img"></span>
+            <a class="frame-label" href="world.html?mirror">Watch</a>
+            <span class="frame-note">The projector view</span>
+          </li>
+        </ol>
+      </section>
+
+      <section class="how">
+        <div class="how-headset">
+          <p class="edge">On the headset, open</p>
+          <p class="headset-url">…</p>
+          <p class="how-small">The first time, the browser warns that the connection is not private. Choose Advanced, then Proceed.</p>
+        </div>
+        <form class="room-form">
+          <label class="edge" for="room">Room</label>
+          <input id="room" name="room" maxlength="24" autocomplete="off" spellcheck="false" />
+          <p class="how-small">Everyone on the same room code shares one darkroom.</p>
+        </form>
+        <p class="edge server-line">Checking the server</p>
+      </section>
+    </main>
+    <script type="module" src="/src/landing/main.js"></script>
+  </body>
+</html>
