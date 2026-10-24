@@ -109,8 +109,12 @@ async function playOne(page, index) {
   await page.evaluate(() => window.__xr.quaternion.set(0, 0, 0, 1));
   await aimAt(page, index);
   await frames(page, 3);
-  await press(page, 'trigger');
-  const took = await until(page, (id) => window.unfade.held?.print.item.spec.id === id, id, 8000);
+  // a press during a fade is ignored on purpose, so try again, up to three presses
+  let took = false;
+  for (let tries = 0; tries < 3 && !took; tries++) {
+    await press(page, 'trigger');
+    took = await until(page, (id) => window.unfade.held?.print.item.spec.id === id, id, 3000);
+  }
   if (!report(took, `takes the print off the line`, id)) return;
 
   // Swing the controller side to side once per rendered frame, so the shake
@@ -159,7 +163,8 @@ async function playOne(page, index) {
   if (!report(titled, 'the colour comes back, then the title writes in')) return;
 
   await press(page, 'b-button');
-  const back = await until(page, () => window.unfade.mode === 'hub', null, 15000);
+  // the fade back to the darkroom keeps it busy, and a busy darkroom ignores the trigger
+  const back = await until(page, () => window.unfade.mode === 'hub' && !window.unfade.busy, null, 15000);
   report(back, 'B goes back to the darkroom');
 }
 
