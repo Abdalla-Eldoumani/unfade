@@ -1,0 +1,48 @@
+{
+  "permissions": {
+    "deny": [
+      "Read(.env)",
+      "Read(.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Read(**/secrets/**)",
+      "Read(**/*credential*)",
+      "Read(**/*.pem)",
+      "Read(**/*.key)",
+      "Read(**/id_rsa*)",
+      "Read(**/id_ed25519*)",
+      "Read(**/.claude/.credentials.json)",
+      "Read(**/.claude.json)",
+      "Read(.cert/**)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "grep -qE 'git[[:space:]]+add[[:space:]]+(-A|--all|\\./?)([[:space:]\\\"]|$)|git[[:space:]]+commit[[:space:]]+(-a|--all|-am)\\b' && { echo 'BLOCK: batch staging is disabled. Stage and commit one file at a time: git add <file> && git commit -m \"<msg>\"' >&2; exit 2; } || exit 0",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'IN=$(cat); echo \"$IN\" | grep -qE \"\\\"command\\\"[[:space:]]*:[[:space:]]*\\\"git[[:space:]]\" && exit 0; if echo \"$IN\" | grep -qE \"(npm run dev|npm run server|npm start|npm run start|npx vite|vite dev|vite preview|node server/index.js|tail -f|--watch)\" && ! echo \"$IN\" | grep -qE \"\\\"run_in_background\\\"[[:space:]]*:[[:space:]]*true\"; then echo \"BLOCK: long-running command without backgrounding. Launch it with run_in_background: true, then poll its output with bounded checks.\" >&2; exit 2; fi; exit 0'",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "bash -c 'IN=$(cat); N=$(echo \"$IN\" | grep -o \"&&\" | wc -l); if [ \"$N\" -ge 3 ]; then echo \"BLOCK: command chain too long. One hung link freezes the whole turn: split into separate calls of two or three related commands.\" >&2; exit 2; fi; exit 0'",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "grep -qE 'git[[:space:]]+reset[[:space:]][^|;&]*--hard|git[[:space:]]+clean[[:space:]]+-[A-Za-z]*f|git[[:space:]]+branch[[:space:]][^|;&]*-D([[:space:]\"\\\\]|$)|git[[:space:]]+(checkout|restore)[[:space:]]+(--[[:space:]]+)?\\.([[:space:]\"\\\\]|$)|git[[:space:]]+push[^|;&]*[[:space:]](-f|--force|--force-with-lease|--force-if-includes)([[:space:]=\"\\\\]|$)|git[[:space:]]+push[^|;&]*[[:space:]]\\+[^[:space:]\"\\\\]+' && { echo 'BLOCK: destructive git command. Hard resets, git clean, force-deleting a branch, unscoped checkout or restore, and force pushes destroy work that exists on one laptop only (data/ holds the saved memories) or rewrite history teammates already pulled: leave them to a person.' >&2; exit 2; } || exit 0",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
