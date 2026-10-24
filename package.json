@@ -1,0 +1,30 @@
+{
+  "name": "unfade",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Step back inside a faded photo and bring it back to life, in a Meta Quest or any browser.",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "setup": "node scripts/setup.mjs",
+    "cert": "bash scripts/make-cert.sh",
+    "dev": "vite",
+    "server": "node server/index.js --dev",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "check": "node scripts/check.mjs",
+    "xr-check": "node scripts/xr-check.mjs"
+  },
+  "dependencies": {
+    "onnxruntime-web": "1.30.0",
+    "three": "0.186.1",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "iwer": "2.7.0",
+    "playwright-core": "1.64.1",
+    "vite": "8.3.5"
+  }
+}
