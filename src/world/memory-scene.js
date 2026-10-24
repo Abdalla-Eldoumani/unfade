@@ -121,18 +121,28 @@ export class MemoryScene {
     const lines = [s.title, [s.when, s.where].filter(Boolean).join(' · ')].filter(Boolean).join('\n');
     this.titleCard = makeText(lines, { font: FONTS.hand(64, 600), lineHeightM: 0.095, maxChars: 26 });
     // Centred under the photo, below the eye line, and nearer than whatever
-    // the photo shows there, so both eyes agree it is in front; scaled with
-    // its distance, so it always looks the same size.
+    // the photo shows anywhere behind it (corners, edges and middle, clamped
+    // to the photo), so both eyes agree it is in front; scaled with its
+    // distance, so it always looks the same size.
     const at = new THREE.Vector3(0, -0.32, -1.25);
-    const v = 0.5 + -at.y / -at.z / (2 * this.built.tanV);
-    if (v <= 1) at.multiplyScalar(Math.min(1, (-this.built.pointAt(0.5, v).z * 0.9) / -at.z));
+    const { width, height } = this.titleCard.userData.size;
+    const { tanH, tanV, pointAt } = this.built;
+    const clamp01 = (x) => Math.min(1, Math.max(0, x));
+    let nearest = Infinity;
+    for (const fx of [-0.5, 0, 0.5]) {
+      for (const fy of [-0.5, 0, 0.5]) {
+        const u = clamp01(0.5 + (fx * width) / -at.z / (2 * tanH));
+        const v = clamp01(0.5 - (at.y + fy * height) / -at.z / (2 * tanV));
+        nearest = Math.min(nearest, -pointAt(u, v).z);
+      }
+    }
+    at.multiplyScalar(Math.min(1, (nearest * 0.9) / -at.z));
     this.titleCard.position.copy(at);
     this.titleCard.scale.setScalar(at.z / -1.25);
     this.titleCard.material.opacity = 0;
     this.titleCard.material.depthTest = false;
     this.titleCard.renderOrder = 22;
     // a soft dark falloff behind the words, so they read over a bright photo
-    const { width, height } = this.titleCard.userData.size;
     const shade = new THREE.Mesh(
       new THREE.PlaneGeometry(width * 1.35, height * 2),
       new THREE.MeshBasicMaterial({ map: glowMap(), color: '#0c0907', transparent: true, opacity: 0, depthWrite: false, depthTest: false }),
@@ -172,7 +182,8 @@ export class MemoryScene {
       const a = this.anchors[i].anchor;
       u.uBloom.value[i].set(a.x, 1 - a.y, b.r, b.w);
     });
-    if (this.vivid < this.vividTarget && t - this.revivedAt > COLOUR_AFTER_S) this.vivid = Math.min(this.vividTarget, this.vivid + dt / REVIVE_S);
+    // on the same clock as the title, so the order holds even when frames are slow
+    if (this.vivid < this.vividTarget) this.vivid = Math.min(this.vividTarget, Math.max(this.vivid, (t - this.revivedAt - COLOUR_AFTER_S) / REVIVE_S));
     const bloomed = this.anchors.filter((a) => a.bloomed).length / this.anchors.length;
     const vividAll = Math.max(this.vivid, bloomed * 0.6);
     u.uVivid.value = this.vivid;
