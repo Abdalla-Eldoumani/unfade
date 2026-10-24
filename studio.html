@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0c0907" />
+    <title>Unfade · studio</title>
+  </head>
+  <body>
+    <header class="studio-top">
+      <a class="studio-brand" href="/" data-brand>Unfade</a>
+      <span class="edge">Studio · make a memory</span>
+      <span class="edge studio-server"></span>
+    </header>
+
+    <main class="studio">
+      <section class="print-area">
+        <div class="print" data-state="empty">
+          <div class="print-window">
+            <img class="print-photo" alt="" hidden />
+            <canvas class="print-wiggle" hidden></canvas>
+            <div class="anchors"></div>
+            <label class="print-drop">
+              <input type="file" accept="image/*" class="file-input" />
+              <span class="edge">Drop a photo here</span>
+              <span class="print-drop-big">or choose one</span>
+            </label>
+          </div>
+          <input class="print-title" maxlength="60" placeholder="Title it in your own words" aria-label="Title" />
+        </div>
+        <div class="print-tools">
+          <label class="button ghost take-photo">Take a photo<input type="file" accept="image/*" capture="environment" class="file-input" hidden /></label>
+          <button class="ghost wiggle-toggle" hidden>See the depth</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <ol class="steps">
+          <li class="step" data-step="words">
+            <p class="edge">01 · In your own words</p>
+            <div class="fields">
+              <label>When <input name="when" maxlength="40" placeholder="October 2019" /></label>
+              <label>Where <input name="where" maxlength="40" placeholder="Our kitchen in Riyadh" /></label>
+            </div>
+          </li>
+          <li class="step" data-step="develop">
+            <p class="edge">02 · Develop</p>
+            <button class="develop" disabled>Develop</button>
+            <p class="progress" aria-live="polite"></p>
+            <p class="privacy">Developing sends a small copy of the photo to Claude, which suggests the spots and questions. The photo and everything else stay on this laptop.</p>
+          </li>
+          <li class="step" data-step="review" hidden>
+            <p class="edge">03 · The spots that bring it back</p>
+            <p class="hint">Drag a spot to move it. Tap the photo to add one (three at most). Change any question, and add what you remember if you like.</p>
+            <ol class="anchor-list"></ol>
+            <div class="scene">
+              <label>Distance <select name="scale"></select></label>
+              <label>Light <select name="light"></select></label>
+              <label>In the air <select name="particles"></select></label>
+              <label>Sounds <select name="sounds" multiple size="4"></select></label>
+            </div>
+            <p class="warning" hidden></p>
+          </li>
+          <li class="step" data-step="save" hidden>
+            <p class="edge">04 · Hang it in the darkroom</p>
+            <button class="save">Hang it on the line</button>
+            <button class="ghost download">Download the files</button>
+            <p class="saved" hidden></p>
+          </li>
+        </ol>
+      </section>
+    </main>
+    <script type="module" src="/src/studio/main.js"></script>
+  </body>
+</html>
