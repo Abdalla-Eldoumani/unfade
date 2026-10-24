@@ -129,6 +129,12 @@ async function playOne(page, index) {
   await page.evaluate(() => window.__xr.controllers.right.position.set(0, 1.55, -0.12));
   const inside = await until(page, (id) => window.unfade.mode === 'memory' && window.unfade.memory.spec?.id === id, id, 20000);
   if (!report(inside, 'holding it to the eyes steps inside')) return;
+  // lower the hand to the hip, pointing at the floor: out of the view and away from every light
+  await page.evaluate(() => {
+    const c = window.__xr.controllers.right;
+    c.position.set(0.2, 1.05, -0.2);
+    c.quaternion.set(-Math.SQRT1_2, 0, 0, Math.SQRT1_2);
+  });
   // once the fade in is over, so the fade itself is not counted
   await until(page, () => window.unfade.memory.anchors.length > 0 && !window.unfade.busy, null, 20000);
   await frames(page, 3);
@@ -145,9 +151,12 @@ async function playOne(page, index) {
   }
   await page.evaluate(() => window.__xr.quaternion.set(0, 0, 0, 1));
   const revived = await until(page, () => window.unfade.memory.revived, null, 30000);
-  await frames(page, 6);
-  await snap(page, `${id}-revived`);
   if (!report(revived, 'every light back revives the memory')) return;
+  // the colour first, then the title in the person's words
+  const titled = await until(page, () => window.unfade.memory.vivid >= 1 && window.unfade.memory.titleCard?.material.opacity >= 0.99, null, 30000);
+  await frames(page, 2);
+  await snap(page, `${id}-revived`);
+  if (!report(titled, 'the colour comes back, then the title writes in')) return;
 
   await press(page, 'b-button');
   const back = await until(page, () => window.unfade.mode === 'hub', null, 15000);
