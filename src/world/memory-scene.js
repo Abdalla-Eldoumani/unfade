@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { fileUrl, loadDepth } from '../shared/memories.js';
 import { AnchorMarker } from './anchors.js';
-import { backgroundPlate, buildDepthMesh } from './depth-mesh.js';
+import { backgroundPlate, buildDepthMesh, plateSize } from './depth-mesh.js';
 import { makeParticles } from './particles.js';
 import { memoryMaterial, peripheryMaterial } from './shaders.js';
 import { FONTS, disposeMesh, glowMap, makeText } from './text.js';
@@ -69,13 +69,13 @@ export class MemoryScene {
     let plate = null;
     if (GAP_FILL) {
       const canvas = document.createElement('canvas');
-      [canvas.width, canvas.height] = [depth.width, depth.height];
+      [canvas.width, canvas.height] = plateSize(depth);
       plate = new THREE.CanvasTexture(canvas);
       plate.colorSpace = THREE.SRGBColorSpace;
-      // made on the first frame inside, under the full paper fade, where the
-      // tenth of a second it takes cannot show (load runs while a print shakes)
+      // made on the first frame inside, under the full paper fade, rather than
+      // here: load runs while a print is being shaken in the hand
       this.platePending = () => {
-        backgroundPlate(spec, photo.image, depth, canvas);
+        backgroundPlate(spec, photo.image, depth, canvas, tanH);
         plate.needsUpdate = true;
       };
     }
