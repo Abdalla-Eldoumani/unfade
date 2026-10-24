@@ -43,7 +43,27 @@ Without a headset, use Meta's Immersive Web Emulator: open the darkroom, click t
 
 ## The demo setup
 
-The headset has to reach the laptop directly, and campus networks such as eduroam usually block one device from reaching another. Use a hotspot instead:
+The headset has to reach the laptop directly, and campus networks such as eduroam usually block one device from reaching another. Use a hotspot instead.
+
+### macOS
+
+The simplest option is an iPhone Personal Hotspot with the Mac, Quest and phone all on it. Alternatively, use Mac Internet Sharing (System Settings, General, Sharing, Internet Sharing: share from Ethernet or another Wi-Fi to devices using Wi-Fi).
+
+1. Connect the Mac, the Quest and a phone to the same hotspot.
+2. On the Mac, in a terminal:
+   ```bash
+   npm run cert
+   npm run build
+   export ANTHROPIC_API_KEY="your key"
+   npm start
+   ```
+3. The server prints the addresses it is reachable on, for example `https://172.20.10.2:8443/`. The landing page at `/` shows the same addresses in large text.
+4. In the Quest, open Meta Quest Browser and go to `https://<address>:8443/world.html`. It warns that the connection is not private: choose Advanced, then Proceed. Press "Step into the darkroom".
+5. On the Mac or a projector, open `https://localhost:8443/world.html?mirror`. On the phone, open `https://<address>:8443/guide.html`.
+
+If the macOS firewall is enabled (System Settings, Network, Firewall), allow incoming connections for Node in Firewall Options.
+
+### Windows
 
 1. On the laptop: Settings, Network and internet, Mobile hotspot, turn it on. The laptop's address on its own hotspot is usually 192.168.137.1. A phone hotspot with both devices on it works too.
 2. Connect the Quest to that hotspot.
@@ -54,7 +74,7 @@ The headset has to reach the laptop directly, and campus networks such as eduroa
 5. In the Quest, open Meta Quest Browser and go to `https://<laptop address>:8443/world.html`. It warns that the connection is not private: choose Advanced, then Proceed. Press "Step into the darkroom".
 6. On the laptop or a projector, open `https://localhost:8443/world.html?mirror`. On a phone on the same hotspot, open `/guide.html`.
 
-The landing page at `/` shows the exact address to type into the headset and whether Claude is on.
+The landing page at `/` shows the exact address to type into the headset, the mirror and guide addresses, and whether Claude is on.
 
 ### Claude
 
