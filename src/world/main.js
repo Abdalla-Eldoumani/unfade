@@ -69,7 +69,7 @@ class World {
     this.busy = false;
     this.held = null;
     this.t = 0;
-    this.fade = { mesh: makeFadeSphere(), from: 0, to: 0, start: 0, dur: 0, resolve: null };
+    this.fade = { mesh: makeFadeSphere(), from: 0, to: 0, elapsed: 0, dur: 0, resolve: null };
     this.stage.scene.add(this.fade.mesh);
     this.hubSound = null;
     this.memSound = null;
@@ -224,7 +224,7 @@ class World {
     if (this.mode === 'hub') this.hubFrame(dt, t, head, pointers, actions, presenting);
     else this.memoryFrame(dt, t, head, pointers, actions);
 
-    this.updateFade(t, head);
+    this.updateFade(dt, head);
     if (!IS_MIRROR) this.sendPresence(head, pointers, presenting);
     const space = this.mode === 'memory' ? this.memory.group : this.hub.group;
     this.avatars.update(dt, this.room.peers, {
@@ -561,17 +561,20 @@ class World {
     if (color) f.mesh.material.color.set(color);
     f.from = f.mesh.material.opacity;
     f.to = to;
-    f.start = this.t + delay;
+    f.elapsed = -delay;
     f.dur = seconds;
     f.resolve?.();
     return new Promise((resolve) => (f.resolve = resolve));
   }
 
-  updateFade(t, head) {
+  // Counted in capped frame steps, not clock time, so one long frame (a shader
+  // compiling, the background plate being made) cannot jump a fade.
+  updateFade(dt, head) {
     const f = this.fade;
     f.mesh.position.copy(head.position);
     if (!f.resolve) return;
-    const k = f.dur > 0 ? Math.min(1, Math.max(0, (t - f.start) / f.dur)) : 1;
+    f.elapsed += dt;
+    const k = f.dur > 0 ? Math.min(1, Math.max(0, f.elapsed / f.dur)) : 1;
     f.mesh.material.opacity = f.from + (f.to - f.from) * k * k * (3 - 2 * k);
     f.mesh.visible = f.mesh.material.opacity > 0.001;
     if (k >= 1) {
