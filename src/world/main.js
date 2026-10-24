@@ -192,6 +192,9 @@ class World {
     this.memSound?.setVivid(this.memory.revived ? 1 : (p.bloomed / p.total) * 0.6);
     if (this.memory.revived && !wasRevived) {
       this.audio.oneShot('revive');
+      // the sound swells first; the colour and then the title follow it (memory-scene.js)
+      const layers = this.memory.spec.scene.soundLayers;
+      for (const layer of layers.length ? layers : ['room_tone']) this.memSound?.swell(layer);
       this.syncRevived();
     }
   }
