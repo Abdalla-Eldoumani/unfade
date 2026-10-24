@@ -94,7 +94,14 @@ class World {
 
     this.hud.hideLoading();
     if (params.has('debug')) window.unfade = this;
-    this.stage.start((dt, t) => this.frame(dt, t));
+    this.stage.start((dt, t) => {
+      try {
+        this.frame(dt, t);
+      } finally {
+        // also after a frame that threw, so its error reaches the readout
+        this.readout?.update(this.stage.renderer.info.render, this.stage.presenting);
+      }
+    });
     const direct = params.get('memory');
     if (direct && this.items.has(direct)) this.openDirect(direct);
   }
@@ -224,7 +231,6 @@ class World {
       this.lastHud = t;
       this.refreshHud();
     }
-    this.readout?.update(this.stage.renderer.info.render, presenting);
   }
 
   placeForHeadset() {
