@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0c0907" />
+    <title>Unfade · guide</title>
+  </head>
+  <body>
+    <header class="guide-top">
+      <a class="guide-brand" href="/" data-brand>Unfade</a>
+      <span class="edge">Guide · remember it together</span>
+      <span class="edge guide-status"></span>
+    </header>
+    <main class="guide">
+      <section class="now">
+        <p class="edge now-where">Waiting for the headset</p>
+        <h1 class="now-title"></h1>
+        <div class="now-photo" hidden>
+          <img alt="" />
+          <div class="now-dots"></div>
+        </div>
+        <ol class="now-anchors"></ol>
+        <form class="note-form" hidden>
+          <label>Add something you remember
+            <textarea name="text" maxlength="160" rows="2" placeholder="Mom stayed up to bake it"></textarea>
+          </label>
+          <div class="note-row">
+            <label>About <select name="anchor"></select></label>
+            <label>Signed <input name="author" maxlength="24" placeholder="Your name" /></label>
+            <button type="submit">Send it in</button>
+          </div>
+        </form>
+      </section>
+      <aside class="side">
+        <p class="edge">On the line</p>
+        <ul class="memories"></ul>
+        <p class="edge">In the room</p>
+        <ul class="peers"></ul>
+        <button class="ghost reset">Reset for the next visitor</button>
+      </aside>
+    </main>
+    <script type="module" src="/src/guide/main.js"></script>
+  </body>
+</html>
