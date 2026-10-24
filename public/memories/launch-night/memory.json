@@ -1,0 +1,77 @@
+{
+  "spec": 1,
+  "id": "launch-night",
+  "title": "Launch night",
+  "when": "",
+  "where": "",
+  "createdAt": "2026-10-24T06:00:00.000Z",
+  "photo": {
+    "src": "photo.jpg",
+    "width": 640,
+    "height": 427
+  },
+  "thumb": {
+    "src": "thumb.jpg",
+    "width": 512,
+    "height": 342
+  },
+  "depth": {
+    "src": "depth.png",
+    "width": 518,
+    "height": 350,
+    "encoding": "rg16-disparity"
+  },
+  "camera": {
+    "lens": "main",
+    "focal35mm": null
+  },
+  "scene": {
+    "scale": "landscape",
+    "light": "night",
+    "particles": "mist",
+    "soundLayers": [
+      "wind",
+      "night_air"
+    ]
+  },
+  "palette": [
+    "#2b364f",
+    "#1b2335",
+    "#3b4a69",
+    "#5c606d",
+    "#b89b6e"
+  ],
+  "anchors": [
+    {
+      "id": "a1",
+      "x": 0.5031,
+      "y": 0.3981,
+      "label": "the rocket",
+      "question": "Who did you watch this with?",
+      "sound": "wind",
+      "note": ""
+    },
+    {
+      "id": "a2",
+      "x": 0.2344,
+      "y": 0.8899,
+      "label": "the lights",
+      "question": "How cold was it out there?",
+      "sound": "night_air",
+      "note": ""
+    },
+    {
+      "id": "a3",
+      "x": 0.9375,
+      "y": 0.5386,
+      "label": "the tower",
+      "question": "Where were you standing?",
+      "sound": "wind",
+      "note": ""
+    }
+  ],
+  "source": {
+    "analysis": "manual",
+    "model": null
+  }
+}
