@@ -163,6 +163,21 @@ a {
   justify-content: center;
 }
 
+/* out of sight but still reachable with Tab; the label shows the focus */
+.take-photo input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.take-photo:focus-within,
+.print-drop:focus-within {
+  outline: 2px solid var(--safelight-glow);
+  outline-offset: 2px;
+}
+
 .anchors {
   position: absolute;
   inset: 0;
@@ -359,6 +374,61 @@ textarea {
 .remove {
   padding: var(--space-2) var(--space-3);
   font-size: var(--step-0);
+}
+
+.add-spot {
+  margin-top: var(--space-3);
+}
+
+.sounds {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.sounds legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-size: var(--step-0);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--paper-3);
+}
+
+.sound-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-2) var(--space-4);
+}
+
+label.sound {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--step-1);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--paper);
+  cursor: pointer;
+}
+
+.sound input {
+  width: auto;
+  accent-color: var(--safelight);
+}
+
+/* the text inputs show focus with their border, which a checkbox does not have */
+.sound input:focus-visible {
+  outline: 2px solid var(--safelight-glow);
+  outline-offset: 2px;
+}
+
+/* a fourth sound waits until one of the three is unticked */
+.sound:has(input:disabled) {
+  color: var(--paper-3);
+  cursor: default;
 }
 
 .warning {
