@@ -86,8 +86,23 @@ class AudioEngine {
 
   scene(layers) {
     const m = this.mix(layers.length ? layers : ['room_tone'], 0.22);
+    // Lowpass filter: starts muffled (500 Hz), opens as colour returns.
+    // Only scene() gets this; ambience() stays clear.
+    let lp = null;
+    if (this.ctx) {
+      lp = this.ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 500;
+      lp.Q.value = 0.7;
+      m.out.disconnect();
+      m.out.connect(lp).connect(this.master);
+    }
     return {
-      setVivid: (v) => m.setGain(0.22 + 0.78 * Math.min(1, Math.max(0, v)), 1.5),
+      setVivid: (v) => {
+        const clamped = Math.min(1, Math.max(0, v));
+        m.setGain(0.22 + 0.78 * clamped, 1.5);
+        if (lp) lp.frequency.setTargetAtTime(500 + 11500 * clamped, this.ctx.currentTime, 0.5);
+      },
       swell: (layer) => {
         const p = m.parts.get(layer);
         if (!p || !this.ctx) return;
@@ -97,7 +112,10 @@ class AudioEngine {
         g.setTargetAtTime(1.8, t, 0.4);
         g.setTargetAtTime(1.2, t + 4, 1.5);
       },
-      stop: (s) => m.stop(s),
+      stop: (s) => {
+        m.stop(s);
+        if (lp) setTimeout(() => lp.disconnect(), (s || 1.2) * 1000 + 400);
+      },
     };
   }
 
