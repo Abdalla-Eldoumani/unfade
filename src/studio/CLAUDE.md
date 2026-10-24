@@ -9,6 +9,9 @@
 - Playwright screenshots wait for the main thread, so they cannot show what happens during the block; CDP `Page.startScreencast` frames come from the compositor and can.
 - Failure without pulling a cable: start the server with `ANTHROPIC_API_KEY=wrong-key-for-a-failure-test` (the real API answers 401, free) and, for no network, also `NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:9` (Node 24 sends fetch through the dead proxy: ECONNREFUSED). Both ended with a memory on the line.
 
+- After developing, Develop again rests (disabled) until the title, when or where change, or while the last answer was the fallback: re-developing replaces the spots and any notes on them, so it should never be one stray click away.
+- Without a key, `page.route('**/api/analyze', ...)` answering `{ source: 'claude', analysis: {...} }` stands in for Claude, to check the spots arriving, Develop again and the sounds Claude ticks.
+
 ## Checking without a person
 - One photo onto the line, headless: open `/world.html?debug` (it joins room demo over the server) and `/studio.html`, give the photo to `.print-drop input` (laptop) or `.take-photo input` (phone: 390x844, touch, isMobile), fill the title starting with "test", Develop, tap the photo if no spots came back, Hang it, wait for `unfade.hub.prints` to hold the id, then `DELETE /api/memories/<id>`. With the depth model on this laptop's CPU, develop takes about 15 s and the line about 18 s.
 - Phone, emulated (task 3): a 4032x3024 JPEG stored sideways with Orientation 6 and FocalLengthIn35mmFilm 26 (EXIF spliced in after SOI) comes out 1536x2048 with focal35mm 26. With the CPU throttled 4x (`Emulation.setCPUThrottlingRate`) the line takes 34 s, under the 60 s goal; a real phone's speed still needs the phone. Tap the photo with `touchscreen.tap` only after checking its box is inside the viewport: raw coordinates do not scroll.
