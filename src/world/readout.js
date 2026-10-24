@@ -2,9 +2,10 @@ import { FONTS, disposeMesh, makeText } from './text.js';
 
 const LINE_M = 0.03; // at 1 m: about 34 px a line on a Quest 2, 19 px on a laptop
 // How far down the half view it sits: in the headset below the prints on the
-// line and the title card; on a laptop above the overlay's hint and buttons.
+// line and the title card; on a laptop below the title card and above the
+// overlay's hint and buttons.
 const DOWN_XR = 0.6;
-const DOWN_WINDOW = 0.5;
+const DOWN_WINDOW = 0.6;
 
 // Behind ?debug: frame time over the last second, draw calls, triangles and
 // the last error, written near the bottom of the view. Inside the headset
