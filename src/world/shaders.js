@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 
+// What the haze around a memory works out for every pixel it covers, the
+// fourth lever if the headset drops frames: 2 the photo's own blur with the
+// ragged bloom edges behind the photo, 1 the blur without them, 0 one flat colour.
+const HAZE_DETAIL = 2;
+
 // All colour maths happens in linear space; each fragment shader ends with
 // colorspace_fragment so three converts to the display's sRGB.
 const DITHER = /* glsl */ `
@@ -139,6 +144,7 @@ export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, blo
   return new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
+    defines: { HAZE_DETAIL },
     uniforms: {
       uPhoto: { value: photo },
       // an explicit mip level: past the photo's edge the uv is clamped, so
@@ -177,6 +183,7 @@ export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, blo
         vec3 col = uBase;
         float inside = 0.0;
         float local = uVivid;
+        #if HAZE_DETAIL > 0
         if (d.z < -0.02) {
           vec2 p = d.xy / -d.z;
           vec2 uv = 0.5 + p / (2.0 * uTan);
@@ -187,8 +194,13 @@ export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, blo
           float lod = mix(uLod + 1.0, 2.5, inside);
           vec3 c = textureLod(uPhoto, clamp(uv, 0.0, 1.0), lod).rgb;
           col = mix(uBase, c * mix(0.75, 1.0, inside), w);
+          #if HAZE_DETAIL > 1
           local = mix(uVivid, bloomAt(clamp(uv, 0.0, 1.0), uCore), inside);
+          #else
+          local = mix(uVivid, uCore, inside);
+          #endif
         }
+        #endif
         col *= mix(mix(0.5, 1.0, smoothstep(-0.7, 0.25, d.y)), 1.0, inside);
         col = mix(fadedLook(col, uPaper * mix(0.4, 1.0, inside), uCast), col, local);
         col += (ign(gl_FragCoord.xy) - 0.5) * 0.012;
