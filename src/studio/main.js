@@ -133,6 +133,9 @@ async function develop() {
   if (!state.photo) return;
   el.develop.disabled = true;
   el.print.dataset.state = 'developing';
+  // on a phone the print has scrolled away by the time Develop is tapped, and the
+  // person needs it in view to watch it develop and to touch the spots
+  el.print.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   try {
     setProgress('Reading the depth of the photo...');
     state.depth = await estimateDepth(state.photo);
