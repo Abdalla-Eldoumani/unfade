@@ -185,7 +185,7 @@ async function handle(req, res) {
 // The laptop's own hotspot (192.168.137.x on Windows) first, since that is
 // what the headset joins; link-local addresses are never reachable.
 function lanAddresses() {
-  const rank = (ip) => (ip.startsWith('192.168.137.') ? 0 : ip.startsWith('192.168.') ? 1 : ip.startsWith('10.') ? 2 : 3);
+  const rank = (ip) => (ip.startsWith('192.168.137.') || ip.startsWith('172.20.10.') ? 0 : ip.startsWith('192.168.') ? 1 : ip.startsWith('10.') ? 2 : 3);
   return Object.values(os.networkInterfaces())
     .flat()
     .filter((i) => i && i.family === 'IPv4' && !i.internal && !i.address.startsWith('169.254.'))
