@@ -32,13 +32,16 @@ export class Readout {
   // (both eyes in a headset).
   update(info, presenting) {
     const now = performance.now();
-    if (this.prev) this.frames.push(now - this.prev);
+    // a gap of a second or more is a pause (hidden tab, headset off), not a frame
+    if (this.prev && now - this.prev < 1000) this.frames.push(now - this.prev);
     this.prev = now;
     // redrawn once a second: a new texture every frame would cost more than it measures
     if (!this.mesh || now - this.drawnAt >= 1000) this.redraw(info, now);
     // camera.fov follows the headset's view once a session renders
-    const down = Math.tan((this.camera.fov * Math.PI) / 360) * (presenting ? DOWN_XR : DOWN_WINDOW);
-    this.mesh.position.set(0, -down, -1);
+    const tan = Math.tan((this.camera.fov * Math.PI) / 360);
+    // narrower than the view on a phone held upright
+    this.mesh.scale.setScalar(Math.min(1, (1.9 * tan * this.camera.aspect) / this.mesh.userData.size.width));
+    this.mesh.position.set(0, -tan * (presenting ? DOWN_XR : DOWN_WINDOW), -1);
   }
 
   redraw(info, now) {
