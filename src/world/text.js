@@ -44,6 +44,7 @@ export function makeText(text, {
   align = 'center',
   shadow = true,
   letterSpacing = 0,
+  background = null,
 } = {}) {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
@@ -55,6 +56,10 @@ export function makeText(text, {
   const width = Math.ceil(Math.max(...lines.map((l) => ctx.measureText(l).width), 1)) + pad * 2 + letterSpacing * 40;
   canvas.width = Math.min(2048, width);
   canvas.height = lines.length * lineH + pad * 2;
+  if (background) {
+    ctx.fillStyle = background;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
   ctx.font = font;
   ctx.textBaseline = 'middle';
   ctx.textAlign = align;
