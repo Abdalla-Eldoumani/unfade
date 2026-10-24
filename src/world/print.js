@@ -41,6 +41,7 @@ export class Print {
     const image = new THREE.Mesh(new THREE.PlaneGeometry(winW, winH), this.material);
     image.position.set(0, -side - winH / 2, 0.0018);
     this.group.add(image);
+    this.image = image;
 
     const title = makeText(item.spec.title, {
       font: FONTS.hand(64, 600),
@@ -68,6 +69,8 @@ export class Print {
 
     this.hitTargets = [frame, image];
     for (const m of this.hitTargets) m.userData.print = this;
+    this.parts = [frame, image, title, pin];
+    for (const m of this.parts) m.userData.renderOrder = m.renderOrder;
 
     this.slot = new THREE.Vector3();
     this.hover = 0;
@@ -85,6 +88,17 @@ export class Print {
     this.material.uniforms.uWarm.value = on ? 1 : 0;
     this.setDevelop(on ? 1 : FADED_LEVEL);
     this.glow.material.opacity = on ? 0.55 : 0;
+  }
+
+  // While it rises to the eyes nothing in the room can be nearer, so it is
+  // drawn over everything, back to front: in the emulator the room's ceiling
+  // and floor otherwise cut into a print this big and close.
+  setOnTop(on) {
+    this.parts.forEach((m, i) => {
+      m.material.depthTest = !on;
+      m.renderOrder = on ? 30 + i : m.userData.renderOrder;
+    });
+    this.glow.visible = !on;
   }
 
   // Hanging on the line: gentle sway, lifts a little when pointed at.
