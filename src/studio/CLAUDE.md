@@ -4,6 +4,8 @@
 - The studio branch comes from main, so World's xr-check fixes (the take retry, the wait for the fade back) are not on it yet; a rare "takes the print off the line" failure here is that known flake, not the studio.
 - Editing a file under src/ while a browser check runs makes Vite reload the page mid-run. Edit between runs.
 - `/api/analyze` answers 200 even when Claude fails; the reason arrives as `warning` and the studio shows it in the review step. claude.js makes that reason one plain sentence ending "so place the spots yourself by tapping the photo."
+- The depth model holds the page's main thread for the whole run (no animation frames at all for about 5 s here, longer on a phone). Anything that must move meanwhile is a Web Animations opacity or transform animation, which the compositor keeps running. The first frame after the block still carries the time from before it, so read an animated value two frames later (`toward` in `developPrint`).
+- Playwright screenshots wait for the main thread, so they cannot show what happens during the block; CDP `Page.startScreencast` frames come from the compositor and can.
 - Failure without pulling a cable: start the server with `ANTHROPIC_API_KEY=wrong-key-for-a-failure-test` (the real API answers 401, free) and, for no network, also `NODE_USE_ENV_PROXY=1 HTTPS_PROXY=http://127.0.0.1:9` (Node 24 sends fetch through the dead proxy: ECONNREFUSED). Both ended with a memory on the line.
 
 ## Checking without a person
