@@ -28,6 +28,12 @@ const SELF_DEVELOP = 0.03; // added per second while held
 const SHAKE_SPEED = 0.55; // m/s a controller must move for a reversal to count
 const STEP_IN_M = 0.3; // print this close to the eyes steps in
 const LINE_BELOW_EYES = 0.28; // m, where the line hangs in VR
+// Stepping in: the print rises to the eye line and grows until its photo is
+// all there is to see, while the paper flash takes over for the last part.
+const RISE_S = 0.8; // s from the hand to filling the view
+const FLASH_S = 0.3; // s of paper flash, ending with the rise
+const RISE_M = 0.32; // m in front of the eyes where the print ends up
+const RISE_GROW = 6; // times bigger at the end: its photo then overfills the view
 const textureLoader = new THREE.TextureLoader();
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -255,7 +261,9 @@ class World {
 
   hubFrame(dt, t, head, pointers, actions, presenting) {
     let hovered = null;
-    if (this.held) {
+    if (this.held?.rising) {
+      this.updateRise(t, head);
+    } else if (this.held) {
       this.updateHeld(dt, t, head, pointers, actions, presenting);
     } else {
       for (const p of pointers) {
@@ -272,7 +280,7 @@ class World {
     }
     this.hub.update(dt, t, hovered);
     this.hub.dust && (this.hub.dust.material.uniforms.uScale.value = this.pointScale());
-    if (presenting) {
+    if (presenting && !this.held?.rising) {
       const developed = this.held && this.held.print.develop >= DEVELOPED;
       this.hub.hint(this.held ? (developed ? 'Hold it up to your eyes' : 'Shake it') : 'Point at a photo and pull the trigger');
     } else this.hub.hint('');
@@ -340,7 +348,26 @@ class World {
     else if (putBack) this.putBack();
   }
 
+  // Only the print and the fade move; the camera stays with the head.
+  updateRise(t, head) {
+    const { print, rising } = this.held;
+    const g = print.group;
+    const u = Math.min(1, (t - rising.start) / RISE_S);
+    // lifted and turned upright quickly, then growing late and fast: a fall more than a lift
+    const k = 1 - (1 - u) ** 3;
+    const s = 1 + (RISE_GROW - 1) * u * u * u;
+    const yaw = yawOf(head.quaternion);
+    const ahead = new THREE.Vector3(0, 0, -1).applyAxisAngle(UP, yaw);
+    // straight ahead at eye height, where the memory's photo will be
+    const end = head.position.clone().addScaledVector(ahead, RISE_M);
+    end.y -= print.image.position.y * s;
+    g.position.lerpVectors(rising.from, end, k);
+    g.quaternion.slerpQuaternions(rising.turn, new THREE.Quaternion().setFromAxisAngle(UP, yaw), k);
+    g.scale.setScalar(s);
+  }
+
   putBack() {
+    if (this.held.rising) return;
     const { print } = this.held;
     this.hub.giveBack(print);
     if (!print.revived) print.setDevelop(Math.max(0.3, Math.min(print.develop, 0.3)));
@@ -352,8 +379,12 @@ class World {
     if (this.busy) return;
     this.busy = true;
     this.audio.oneShot('step-in');
-    await this.fadeTo(1, 0.7, '#f1e9dc');
+    this.held.rising = { start: this.t, from: print.group.position.clone(), turn: print.group.quaternion.clone() };
+    print.setOnTop(true);
+    await this.fadeTo(1, FLASH_S, '#f1e9dc', RISE_S - FLASH_S);
     const loaded = await this.preload;
+    print.setOnTop(false);
+    print.group.scale.setScalar(1);
     this.hub.giveBack(print);
     this.held = null;
     if (!loaded) {
@@ -509,12 +540,12 @@ class World {
 
   // ---- fades, sound, overlay ------------------------------------------------
 
-  fadeTo(to, seconds, color) {
+  fadeTo(to, seconds, color, delay = 0) {
     const f = this.fade;
     if (color) f.mesh.material.color.set(color);
     f.from = f.mesh.material.opacity;
     f.to = to;
-    f.start = this.t;
+    f.start = this.t + delay;
     f.dur = seconds;
     f.resolve?.();
     return new Promise((resolve) => (f.resolve = resolve));
@@ -524,7 +555,7 @@ class World {
     const f = this.fade;
     f.mesh.position.copy(head.position);
     if (!f.resolve) return;
-    const k = f.dur > 0 ? Math.min(1, (t - f.start) / f.dur) : 1;
+    const k = f.dur > 0 ? Math.min(1, Math.max(0, (t - f.start) / f.dur)) : 1;
     f.mesh.material.opacity = f.from + (f.to - f.from) * k * k * (3 - 2 * k);
     f.mesh.visible = f.mesh.material.opacity > 0.001;
     if (k >= 1) {
