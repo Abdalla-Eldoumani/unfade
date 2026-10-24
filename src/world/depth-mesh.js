@@ -1,10 +1,14 @@
 import * as THREE from 'three';
 import { DEPTH_RANGE_M, fieldOfView } from '../shared/contract.js';
 
+// Grid cells along the photo's long edge: about 2 x SEGMENTS^2 / aspect
+// triangles. The third lever if the headset drops frames: 160 is the first step down.
+const SEGMENTS = 220;
+
 // Turns a photo plus its depth map into a grid of triangles, as if every
 // pixel were pushed out along the ray the camera saw it on. Standing at the
 // origin you see the photo exactly; moving your head gives real parallax.
-export function buildDepthMesh(spec, depth, { segments = 220 } = {}) {
+export function buildDepthMesh(spec, depth, { segments = SEGMENTS } = {}) {
   const { width: pw, height: ph } = spec.photo;
   const aspect = pw / ph;
   const fov = fieldOfView({ width: pw, height: ph, lens: spec.camera.lens, focal35mm: spec.camera.focal35mm });
