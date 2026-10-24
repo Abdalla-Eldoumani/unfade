@@ -28,19 +28,28 @@ export class PeerAvatars {
         a = this.make(peer);
         this.avatars.set(peerId, a);
       }
-      let head = toWorld(p.head.p);
-      const gap = viewer ? NEAR_M - head.distanceTo(viewer) : 0;
-      if (gap > 0) {
-        const gaze = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion(...p.head.q));
-        head = toWorld(gaze.multiplyScalar(gap).add(new THREE.Vector3(...p.head.p)).toArray());
-      }
+      const real = toWorld(p.head.p);
+      const inMemory = space === 'memory';
+      const head = inMemory && viewer ? clearOf(viewer, real, p, toWorld) : real;
+      // the hands move with the light, so the person stays one shape
+      const shift = head.clone().sub(real);
       if (a.group.position.lengthSq() === 0) a.group.position.copy(head);
       a.group.position.lerp(head, Math.min(1, dt * 12));
       ['l', 'r'].forEach((side, i) => {
         const hp = p.hands?.[side];
         a.hands[i].visible = Boolean(hp);
-        if (hp) a.hands[i].position.lerp(toWorld(hp).sub(a.group.position), Math.min(1, dt * 12));
+        if (hp) a.hands[i].position.lerp(toWorld(hp).add(shift).sub(a.group.position), Math.min(1, dt * 12));
       });
+      // a person is never hidden inside the photo they share; in the darkroom
+      // the bench and a held print still stand in front of them
+      if (a.onTop !== inMemory) {
+        a.onTop = inMemory;
+        a.group.traverse((o) => {
+          if (!o.material) return;
+          o.material.depthTest = !inMemory;
+          o.renderOrder = inMemory ? 15 : o.userData.renderOrder;
+        });
+      }
     }
     for (const [peerId, a] of this.avatars) {
       if (!seen.has(peerId)) {
@@ -59,22 +68,32 @@ export class PeerAvatars {
     const label = makeText(peer.name || 'someone', { font: FONTS.mono(36, 500), px: 36, lineHeightM: 0.035, maxChars: 18 });
     label.position.y = 0.11;
     group.add(label);
-    // a person is never hidden inside the photo they share
-    for (const o of [core, group.children[1], label]) {
-      o.material.depthTest = false;
-      o.renderOrder = 15;
-    }
     const hands = [0, 1].map(() => {
       const h = makeGlow('#ffd9a8', 0.12, 0.8);
       h.visible = false;
       group.add(h);
       return h;
     });
+    group.traverse((o) => (o.userData.renderOrder = o.renderOrder));
     this.scene.add(group);
-    return { group, hands, label };
+    return { group, hands, label, onTop: false };
   }
 
   faceLabels(headPos) {
     for (const a of this.avatars.values()) a.label.lookAt(headPos);
   }
+}
+
+// Where to draw someone standing on, or near, your own spot: out along where
+// they look, and never nearer your eyes than NEAR_M.
+function clearOf(viewer, real, p, toWorld) {
+  const near = real.distanceTo(viewer);
+  if (near >= NEAR_M) return real;
+  const local = new THREE.Vector3(...p.head.p);
+  const gaze = new THREE.Vector3(0, 0, -1).applyQuaternion(new THREE.Quaternion(...p.head.q));
+  const out = toWorld(local.clone().addScaledVector(gaze, NEAR_M - near).toArray());
+  if (out.distanceTo(viewer) >= NEAR_M) return out;
+  // they look toward you: out from your eyes through where they stand, or along their gaze if that is your spot
+  const dir = near > 0.001 ? real.clone().sub(viewer) : toWorld(local.add(gaze).toArray()).sub(real);
+  return viewer.clone().addScaledVector(dir.normalize(), NEAR_M);
 }
