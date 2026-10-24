@@ -7,6 +7,8 @@
 - three r186 has no multiview here: in XR every object draws once per eye, so calls and triangles are about twice a laptop's.
 - In XR three keeps `camera.fov` in step with the headset's projection, but not `camera.aspect` (it stays the window's).
 - `performance.now()` can still be under 1000 on the first frames after load; never treat 0 as "long ago".
+- To film a motion in the emulator, slow the scene clock: `unfade.stage.timer.setTimescale(0.08)`; screenshots are slower than the motion otherwise.
+- In the emulator (mono and stereo) the darkroom's ceiling and floor discs draw over a print held big and close, as if its depth were wrong; cause not found. The rising print draws on top (Print.setOnTop) so the step-in never shows it.
 
 ## Performance levers (turn in this order if the headset drops frames)
 1. `PARTICLE_SHARE` in particles.js, 1 now, try 0.5. The darkroom dust and every memory's particles.
@@ -36,3 +38,4 @@ Laptop window, one view: darkroom 31 calls, 378 triangles; the-cat 14 calls, 66,
 - Hands: does pinch take a print and step in; does shaking a tracked hand count?
 - The ?debug readout sits about 31 degrees below centre (DOWN_XR in readout.js): readable through the lens with foveation at 1, or move it up?
 - Darkroom draws 72 calls for 1,432 triangles: fine at 72 fps, or worth merging the static meshes?
+- Step-in (RISE_S 0.8, FLASH_S 0.3, RISE_M 0.32, RISE_GROW 6 in main.js): does the print growing to fill the view read as falling in, or as something flying at the face? Too fast, too slow?
