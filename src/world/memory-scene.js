@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { fileUrl, loadDepth } from '../shared/memories.js';
 import { AnchorMarker } from './anchors.js';
-import { buildDepthMesh } from './depth-mesh.js';
+import { backgroundPlate, buildDepthMesh } from './depth-mesh.js';
 import { makeParticles } from './particles.js';
 import { memoryMaterial, peripheryMaterial } from './shaders.js';
 import { FONTS, disposeMesh, glowMap, makeText } from './text.js';
@@ -13,6 +13,10 @@ const REVIVE_S = 2.6;
 // comes back, then the title writes in once most of the colour is there.
 const COLOUR_AFTER_S = 0.5;
 const TITLE_AFTER_S = 2.4;
+// Through the gaps that open at depth edges when the head moves, show a guess
+// at what the nearer thing hides (the background plate, depth-mesh.js) rather
+// than a blurred copy of the nearer thing. false switches it off.
+const GAP_FILL = true;
 const loader = new THREE.TextureLoader();
 
 // One memory, stood up in 3D around the viewer. Owns its anchors, blooms,
@@ -62,7 +66,20 @@ export class MemoryScene {
 
     const base = new THREE.Color(spec.palette.at(-1) || '#2b1d16').multiplyScalar(0.35);
     const maxDim = Math.max(spec.photo.width, spec.photo.height);
-    const shared = { tanH, tanV, base, maxDim, aspect, bloom: this.material.uniforms.uBloom };
+    let plate = null;
+    if (GAP_FILL) {
+      const canvas = document.createElement('canvas');
+      [canvas.width, canvas.height] = [depth.width, depth.height];
+      plate = new THREE.CanvasTexture(canvas);
+      plate.colorSpace = THREE.SRGBColorSpace;
+      // made on the first frame inside, under the full paper fade, where the
+      // tenth of a second it takes cannot show (load runs while a print shakes)
+      this.platePending = () => {
+        backgroundPlate(spec, photo.image, depth, canvas);
+        plate.needsUpdate = true;
+      };
+    }
+    const shared = { tanH, tanV, base, maxDim, aspect, bloom: this.material.uniforms.uBloom, plate };
     this.periphery = new THREE.Mesh(new THREE.SphereGeometry(60, 48, 24), peripheryMaterial(photo, shared));
     this.periphery.renderOrder = -1;
     this.group.add(this.periphery);
@@ -169,6 +186,10 @@ export class MemoryScene {
   // Returns the ids of anchors whose look just completed.
   update(dt, t, headPos, rays, pointScale) {
     this.t = t;
+    if (this.platePending) {
+      this.platePending();
+      this.platePending = null;
+    }
     const done = [];
     // a short grace period, so the faded memory is seen before anything returns
     const settled = t - (this.enteredAt ?? t) > 2.5;
@@ -247,6 +268,7 @@ export class MemoryScene {
     this.titleCard = null;
     this.intro = null;
     this.item = null;
+    this.platePending = null;
   }
 }
 
