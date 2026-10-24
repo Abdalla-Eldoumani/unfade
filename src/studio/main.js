@@ -20,6 +20,7 @@ const el = {
   window: $('.print-window'),
   photo: $('.print-photo'),
   wiggle: $('.print-wiggle'),
+  cream: $('.print-cream'),
   anchors: $('.anchors'),
   title: $('.print-title'),
   when: $('input[name=when]'),
@@ -136,25 +137,33 @@ async function develop() {
   // on a phone the print has scrolled away by the time Develop is tapped, and the
   // person needs it in view to watch it develop and to touch the spots
   el.print.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  const print = developPrint();
   try {
     setProgress('Reading the depth of the photo...');
+    // the depth model holds the page until it is done, so let the blank print and these words show first
+    await new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve)));
     state.depth = await estimateDepth(state.photo);
+    print.toward(0.15);
     setProgress('Looking for the spots worth remembering...');
     const stats = imageStats(state.photo);
     const result = await analyzePhoto(state.photo, {
       hints: { title: el.title.value.trim(), when: el.when.value.trim(), where: el.where.value.trim() },
       stats,
     });
-    applyAnalysis(result);
     state.palette = palette(state.photo);
-    state.developed = true;
     el.print.dataset.state = 'review';
+    await print.finish();
+    el.anchors.classList.add('arriving');
+    applyAnalysis(result);
+    setTimeout(() => el.anchors.classList.remove('arriving'), MAX_ANCHORS * 450 + 900);
+    state.developed = true;
     el.review.hidden = false;
     el.saveStep.hidden = false;
     el.wiggleToggle.hidden = false;
     setProgress('Developed.');
   } catch (err) {
     console.error(err);
+    print.cancel();
     el.print.dataset.state = 'loaded';
     setProgress(err.message);
   } finally {
@@ -182,6 +191,39 @@ function setProgress(text) {
   el.progress.textContent = text;
 }
 
+// The headset's metaphor: a blank cream print the photo comes up through. The
+// depth model holds the main thread for seconds (longer on a phone), so the
+// cream is an opacity animation, which the compositor keeps running meanwhile.
+// The work takes an unknown time, so the cream eases toward a level and slows
+// down there rather than clearing before the work is done.
+const SLOWING = 'cubic-bezier(0.05, 0.7, 0.2, 1)';
+
+function developPrint() {
+  let anim = el.cream.animate(
+    [{ opacity: 0, easing: 'ease-out' }, { opacity: 1, offset: 0.015, easing: SLOWING }, { opacity: 0.3 }],
+    { duration: 40000, fill: 'forwards' },
+  );
+  let stopped = false;
+  // the first frame after the model lets go still carries the time from before
+  // it started, so where the cream really is can only be read a frame later
+  const toward = (opacity, duration, easing) => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => {
+    if (stopped) return resolve();
+    const from = getComputedStyle(el.cream).opacity;
+    anim.cancel();
+    anim = el.cream.animate([{ opacity: from }, { opacity }], { duration, easing, fill: 'forwards' });
+    resolve();
+  })));
+  return {
+    toward: (opacity) => toward(opacity, 30000, SLOWING),
+    // the work is done: the rest of the way in the time every develop takes
+    finish: () => toward(0, 900, 'cubic-bezier(0.22, 0.61, 0.36, 1)').then(() => anim.finished).then(() => anim.cancel()),
+    cancel: () => {
+      stopped = true;
+      anim.cancel();
+    },
+  };
+}
+
 // ---- anchors ---------------------------------------------------------------
 
 function renderAnchors() {
@@ -192,6 +234,7 @@ function renderAnchors() {
       dot.textContent = String(i + 1);
       dot.style.left = `${a.x * 100}%`;
       dot.style.top = `${a.y * 100}%`;
+      dot.style.setProperty('--i', i);
       dot.setAttribute('aria-label', `Spot ${i + 1}: ${a.label}`);
       dragDot(dot, a);
       return dot;
