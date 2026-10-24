@@ -491,16 +491,25 @@ class World {
       if (p.space === 'memory' && p.memoryId && (this.mode !== 'memory' || this.memory.spec?.id !== p.memoryId) && this.items.has(p.memoryId)) this.openDirect(p.memoryId);
       else if (p.space === 'hub' && this.mode === 'memory') this.leaveMemory();
     }
-    const space = this.mode === 'memory' ? this.memory.group : this.hub.group;
-    space.updateMatrixWorld(true);
-    const pos = new THREE.Vector3(...p.head.p).applyMatrix4(space.matrixWorld);
-    const q = new THREE.Quaternion(...p.head.q).premultiply(space.getWorldQuaternion(new THREE.Quaternion()));
-    cam.position.lerp(pos, Math.min(1, dt * 8));
-    cam.quaternion.slerp(q, Math.min(1, dt * 6));
-    this.mirrorHeld(p, space);
+    // Follow only while both are in the same place: while one changes place its
+    // pose belongs to the other space, and reading it in this one sends the
+    // camera into the floor. Hold still under the fade instead.
+    const here = p.space === this.mode && (p.space === 'hub' || p.memoryId === this.memory.spec?.id);
+    if (here) {
+      const space = this.mode === 'memory' ? this.memory.group : this.hub.group;
+      space.updateMatrixWorld(true);
+      const pos = new THREE.Vector3(...p.head.p).applyMatrix4(space.matrixWorld);
+      const q = new THREE.Quaternion(...p.head.q).premultiply(space.getWorldQuaternion(new THREE.Quaternion()));
+      // behind a full fade go straight there; otherwise ease, the same at any frame rate
+      const hidden = this.fade.mesh.material.opacity > 0.95;
+      cam.position.lerp(pos, hidden ? 1 : 1 - Math.exp(-dt * 8));
+      cam.quaternion.slerp(q, hidden ? 1 : 1 - Math.exp(-dt * 6));
+      this.mirrorHeld(p, space);
+    }
+    const name = target.name || 'the headset';
     const prog = this.mode === 'memory' ? this.memory.progress() : { bloomed: 0, total: 0 };
-    const title = this.mode === 'memory' ? this.memory.spec?.title : p.held ? this.items.get(p.held.memoryId)?.spec.title : 'In the darkroom';
-    this.hud.setMirror({ who: `Watching ${target.name || 'the headset'}`, title, ...prog });
+    const title = this.mode === 'memory' ? this.memory.spec?.title : p.held ? this.items.get(p.held.memoryId)?.spec.title : '';
+    this.hud.setMirror({ who: this.mode === 'memory' ? `${name} is inside` : `${name} is in the darkroom`, title, ...prog });
   }
 
   mirrorHeld(p, space) {
