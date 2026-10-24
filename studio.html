@@ -30,7 +30,7 @@
           <input class="print-title" maxlength="60" placeholder="Title it in your own words" aria-label="Title" />
         </div>
         <div class="print-tools">
-          <label class="button ghost take-photo">Take a photo<input type="file" accept="image/*" capture="environment" class="file-input" hidden /></label>
+          <label class="button ghost take-photo">Take a photo<input type="file" accept="image/*" capture="environment" class="file-input" /></label>
           <button class="ghost wiggle-toggle" hidden>See the depth</button>
         </div>
       </section>
@@ -52,13 +52,17 @@
           </li>
           <li class="step" data-step="review" hidden>
             <p class="edge">03 · The spots that bring it back</p>
-            <p class="hint">Drag a spot to move it. Tap the photo to add one (three at most). Change any question, and add what you remember if you like.</p>
+            <p class="hint">Drag a spot to move it, or select it and use the arrow keys. Tap the photo to add one (three at most). Change any question, and add what you remember if you like.</p>
             <ol class="anchor-list"></ol>
+            <button class="ghost add-spot">Add a spot</button>
             <div class="scene">
               <label>Distance <select name="scale"></select></label>
               <label>Light <select name="light"></select></label>
               <label>In the air <select name="particles"></select></label>
-              <label>Sounds <select name="sounds" multiple size="4"></select></label>
+              <fieldset class="sounds">
+                <legend>Sounds, up to three</legend>
+                <div class="sound-list"></div>
+              </fieldset>
             </div>
             <p class="warning" hidden></p>
           </li>
