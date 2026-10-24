@@ -92,10 +92,11 @@ export class Print {
 
   // While it rises to the eyes nothing in the room can be nearer, so it is
   // drawn over everything, back to front: in the emulator the room's ceiling
-  // and floor otherwise cut into a print this big and close.
+  // and floor otherwise cut into a print this big and close. Its depth is
+  // still written, so dust and glows behind it stay behind it.
   setOnTop(on) {
     this.parts.forEach((m, i) => {
-      m.material.depthTest = !on;
+      m.material.depthFunc = on ? THREE.AlwaysDepth : THREE.LessEqualDepth;
       m.renderOrder = on ? 30 + i : m.userData.renderOrder;
     });
     this.glow.visible = !on;
