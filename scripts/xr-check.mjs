@@ -17,6 +17,8 @@ const SAMPLES = JSON.parse(readFileSync(new URL('../public/memories/index.json',
 // Software rendering keeps the check the same on every laptop, so it runs at a
 // few frames per second; every wait below is a poll with a deadline, never a fixed sleep.
 const ARGS = ['--ignore-certificate-errors', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
+// Thrown on purpose to prove the ?debug readout shows errors; never counted as a failure.
+const INTENTIONAL = 'intentional error from xr-check';
 
 const results = [];
 let shot = 0;
@@ -148,8 +150,8 @@ try {
   const missing = [];
   // A failed request is listed but does not fail the check: without npm run server
   // the API answers 502 and the pages fall back to the bundled samples on purpose.
-  page.on('console', (m) => m.type() === 'error' && !m.text().startsWith('Failed to load resource') && errors.push(m.text()));
-  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => m.type() === 'error' && !m.text().startsWith('Failed to load resource') && !m.text().includes(INTENTIONAL) && errors.push(m.text()));
+  page.on('pageerror', (e) => !e.message.includes(INTENTIONAL) && errors.push(e.message));
   page.on('response', (r) => r.status() >= 400 && missing.push(`${r.status()} ${new URL(r.url()).pathname}`));
   await page.addInitScript({
     content: `${IWER};
@@ -168,6 +170,12 @@ try {
     const presenting = await until(page, () => window.unfade.stage.presenting, null, 15000);
     if (report(presenting, 'enters VR on the emulated Quest 2')) {
       await frames(page, 4);
+      // Inside the headset the readout is the only console, so a thrown error has to show in it.
+      await page.evaluate((m) => setTimeout(() => { throw new Error(m); }), INTENTIONAL);
+      const shown = await until(page, (m) => window.unfade.readout?.text.includes(m), INTENTIONAL, 15000);
+      const line = await page.evaluate(() => window.unfade.readout?.text.split('\n')[0] ?? '');
+      report(shown && / ms, worst .* calls .* triangles/.test(line), 'the debug readout shows frame time, draw calls and the last error', line);
+      await frames(page, 2);
       await snap(page, 'darkroom');
       const ids = await page.evaluate(() => window.unfade.hub.prints.map((p) => p.item.spec.id));
       for (const id of SAMPLES) {
