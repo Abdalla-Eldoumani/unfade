@@ -33,7 +33,8 @@ const el = {
   scale: $('select[name=scale]'),
   light: $('select[name=light]'),
   particles: $('select[name=particles]'),
-  sounds: $('select[name=sounds]'),
+  sounds: $('.sound-list'),
+  addSpot: $('.add-spot'),
   warning: $('.warning'),
   save: $('.save'),
   download: $('.download'),
@@ -55,6 +56,7 @@ const state = {
   source: 'manual',
   model: null,
   developed: false,
+  developedWords: '',
 };
 
 function fillSelect(select, values, labels) {
@@ -63,11 +65,20 @@ function fillSelect(select, values, labels) {
 fillSelect(el.scale, SCALES, LABELS.scale);
 fillSelect(el.light, LIGHTS, LABELS.light);
 fillSelect(el.particles, PARTICLES, LABELS.particles);
-fillSelect(el.sounds, SOUND_LAYERS, LABELS.sounds);
-el.sounds.addEventListener('change', () => {
-  const chosen = [...el.sounds.selectedOptions];
-  if (chosen.length > MAX_SOUND_LAYERS) chosen.at(-1).selected = false;
+const soundBoxes = SOUND_LAYERS.map((v) => {
+  const box = Object.assign(document.createElement('input'), { type: 'checkbox', value: v });
+  const label = document.createElement('label');
+  label.className = 'sound';
+  label.append(box, LABELS.sounds[v] || v);
+  el.sounds.append(label);
+  return box;
 });
+// three at most: the others wait, disabled, until one is unticked
+function limitSounds() {
+  const full = soundBoxes.filter((b) => b.checked).length >= MAX_SOUND_LAYERS;
+  for (const b of soundBoxes) b.disabled = full && !b.checked;
+}
+el.sounds.addEventListener('change', limitSounds);
 
 // ---- server status ---------------------------------------------------------
 
@@ -97,16 +108,29 @@ el.print.addEventListener('drop', (e) => {
   if (file) loadFile(file);
 });
 
+// A phone's photo is well under this; past it, decoding can run a phone out of memory.
+const MAX_PHOTO_MB = 40;
+
+function refuse(text) {
+  setProgress(text);
+  el.progress.scrollIntoView({ block: 'nearest' });
+}
+
 async function loadFile(file) {
   setProgress('');
+  if (file.type && !file.type.startsWith('image/')) {
+    return refuse(`"${file.name}" is not a photo. Choose a JPEG, PNG or WebP photo.`);
+  }
+  if (file.size > MAX_PHOTO_MB * 1e6) {
+    return refuse(`"${file.name}" is ${Math.round(file.size / 1e6)} MB, more than the ${MAX_PHOTO_MB} MB the studio can open. Choose a smaller copy of it.`);
+  }
   try {
     const bitmap = await decodeImage(file);
     state.photo = resizeToCanvas(bitmap, 2048);
     state.thumb = resizeToCanvas(bitmap, 512);
     state.focal35 = await readFocal35(file);
   } catch (err) {
-    setProgress(err.message);
-    return;
+    return refuse(err.message);
   }
   state.photoUrl = jpegDataUrl(state.photo, 0.9);
   state.anchors = [];
@@ -117,6 +141,7 @@ async function loadFile(file) {
   el.window.style.aspectRatio = `${state.photo.width} / ${state.photo.height}`;
   el.print.dataset.state = 'loaded';
   el.develop.disabled = false;
+  el.develop.textContent = 'Develop';
   el.review.hidden = true;
   el.saveStep.hidden = true;
   el.saved.hidden = true;
@@ -130,9 +155,23 @@ async function loadFile(file) {
 
 el.develop.addEventListener('click', develop);
 
+// Claude reads the photo and these words, so after developing, only new words
+// (or a first try that never reached Claude) are worth developing again for.
+const words = () => [el.title, el.when, el.where].map((input) => input.value.trim()).join('\n');
+const canDevelopAgain = () => state.source === 'fallback' || words() !== state.developedWords;
+
+for (const input of [el.title, el.when, el.where]) {
+  input.addEventListener('input', () => {
+    if (!state.developed || el.print.dataset.state === 'developing') return;
+    el.develop.disabled = !canDevelopAgain();
+    if (state.source !== 'fallback') setProgress(el.develop.disabled ? 'Developed.' : 'Your words changed. Develop again to fit the spots to them; it replaces the spots below.');
+  });
+}
+
 async function develop() {
   if (!state.photo) return;
   el.develop.disabled = true;
+  state.developed = false;
   el.print.dataset.state = 'developing';
   // on a phone the print has scrolled away by the time Develop is tapped, and the
   // person needs it in view to watch it develop and to touch the spots
@@ -157,6 +196,8 @@ async function develop() {
     applyAnalysis(result);
     setTimeout(() => el.anchors.classList.remove('arriving'), MAX_ANCHORS * 450 + 900);
     state.developed = true;
+    state.developedWords = words();
+    el.develop.textContent = 'Develop again';
     el.review.hidden = false;
     el.saveStep.hidden = false;
     el.wiggleToggle.hidden = false;
@@ -167,7 +208,7 @@ async function develop() {
     el.print.dataset.state = 'loaded';
     setProgress(err.message);
   } finally {
-    el.develop.disabled = false;
+    el.develop.disabled = state.developed && !canDevelopAgain();
   }
 }
 
@@ -180,7 +221,8 @@ function applyAnalysis({ analysis: a, source, model, warning }) {
   el.scale.value = a.scale;
   el.light.value = a.light;
   el.particles.value = a.particles;
-  for (const opt of el.sounds.options) opt.selected = (a.soundLayers || []).includes(opt.value);
+  for (const b of soundBoxes) b.checked = (a.soundLayers || []).includes(b.value);
+  limitSounds();
   state.anchors = (a.anchors || []).slice(0, MAX_ANCHORS).map((x, i) => ({ ...x, id: `a${i + 1}`, note: '' }));
   el.warning.hidden = !warning;
   el.warning.textContent = warning || '';
@@ -227,6 +269,7 @@ function developPrint() {
 // ---- anchors ---------------------------------------------------------------
 
 function renderAnchors() {
+  el.addSpot.disabled = state.anchors.length >= MAX_ANCHORS;
   el.anchors.replaceChildren(
     ...state.anchors.map((a, i) => {
       const dot = document.createElement('button');
@@ -267,16 +310,27 @@ function renderAnchors() {
 }
 
 function dragDot(dot, a) {
+  const place = (x, y) => {
+    a.x = Math.min(1, Math.max(0, x));
+    a.y = Math.min(1, Math.max(0, y));
+    dot.style.left = `${a.x * 100}%`;
+    dot.style.top = `${a.y * 100}%`;
+  };
+  // the arrow keys move a spot too: a small step, or a bigger one with Shift
+  dot.addEventListener('keydown', (e) => {
+    const step = e.shiftKey ? 0.05 : 0.01;
+    const [dx, dy] = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key] || [0, 0];
+    if (!dx && !dy) return;
+    e.preventDefault();
+    place(a.x + dx, a.y + dy);
+  });
   dot.addEventListener('pointerdown', (e) => {
     e.preventDefault();
     e.stopPropagation();
     dot.setPointerCapture(e.pointerId);
     const move = (ev) => {
       const r = el.window.getBoundingClientRect();
-      a.x = Math.min(1, Math.max(0, (ev.clientX - r.left) / r.width));
-      a.y = Math.min(1, Math.max(0, (ev.clientY - r.top) / r.height));
-      dot.style.left = `${a.x * 100}%`;
-      dot.style.top = `${a.y * 100}%`;
+      place((ev.clientX - r.left) / r.width, (ev.clientY - r.top) / r.height);
     };
     const up = () => {
       dot.removeEventListener('pointermove', move);
@@ -288,19 +342,22 @@ function dragDot(dot, a) {
 }
 
 el.window.addEventListener('click', (e) => {
-  if (!state.developed || e.target.closest('.anchor-dot') || state.anchors.length >= MAX_ANCHORS) return;
+  if (!state.developed || e.target.closest('.anchor-dot')) return;
   const r = el.window.getBoundingClientRect();
-  state.anchors.push({
-    id: `a${state.anchors.length + 1}`,
-    x: (e.clientX - r.left) / r.width,
-    y: (e.clientY - r.top) / r.height,
-    label: 'this',
-    question: 'What do you remember here?',
-    sound: 'none',
-    note: '',
-  });
-  renderAnchors();
+  addSpot((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
 });
+
+// the keyboard's way to add one: in the middle, focused, ready for the arrow keys
+el.addSpot.addEventListener('click', () => {
+  addSpot(0.5, 0.5);
+  el.anchors.lastElementChild?.focus();
+});
+
+function addSpot(x, y) {
+  if (state.anchors.length >= MAX_ANCHORS) return;
+  state.anchors.push({ id: `a${state.anchors.length + 1}`, x, y, label: 'this', question: 'What do you remember here?', sound: 'none', note: '' });
+  renderAnchors();
+}
 
 // ---- depth preview: the photo sways as if seen from two eyes ---------------
 
@@ -381,7 +438,7 @@ function buildSpec() {
       scale: el.scale.value,
       light: el.light.value,
       particles: el.particles.value,
-      soundLayers: [...el.sounds.selectedOptions].map((o) => o.value),
+      soundLayers: soundBoxes.filter((b) => b.checked).map((b) => b.value),
     },
     palette: state.palette,
     anchors: state.anchors,
