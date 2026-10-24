@@ -73,7 +73,13 @@ export class Stage {
       this.xrFrame = frame || null;
       this.timer.update(time);
       const dt = Math.min(0.1, this.timer.getDelta());
-      onFrame(dt, this.timer.getElapsed(), frame);
+      // a frame that throws still draws, so the headset never freezes on its
+      // last image and the ?debug readout can show the error
+      try {
+        onFrame(dt, this.timer.getElapsed(), frame);
+      } catch (err) {
+        console.error(err);
+      }
       this.renderer.render(this.scene, this.camera);
     });
   }
