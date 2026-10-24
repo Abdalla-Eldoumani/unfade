@@ -1,0 +1,76 @@
+{
+  "spec": 1,
+  "id": "morning-coffee",
+  "title": "Morning coffee",
+  "when": "",
+  "where": "",
+  "createdAt": "2026-10-24T06:00:00.000Z",
+  "photo": {
+    "src": "photo.jpg",
+    "width": 600,
+    "height": 400
+  },
+  "thumb": {
+    "src": "thumb.jpg",
+    "width": 512,
+    "height": 341
+  },
+  "depth": {
+    "src": "depth.png",
+    "width": 518,
+    "height": 350,
+    "encoding": "rg16-disparity"
+  },
+  "camera": {
+    "lens": "main",
+    "focal35mm": null
+  },
+  "scene": {
+    "scale": "closeup",
+    "light": "warm_indoor",
+    "particles": "dust",
+    "soundLayers": [
+      "room_tone"
+    ]
+  },
+  "palette": [
+    "#aa4821",
+    "#c77f4b",
+    "#2b0c06",
+    "#76210f",
+    "#e5c3a3"
+  ],
+  "anchors": [
+    {
+      "id": "a1",
+      "x": 0.4833,
+      "y": 0.375,
+      "label": "the cup",
+      "question": "Who made this cup for you?",
+      "sound": "none",
+      "note": ""
+    },
+    {
+      "id": "a2",
+      "x": 0.6083,
+      "y": 0.7125,
+      "label": "the spoon",
+      "question": "How long did you let it sit?",
+      "sound": "none",
+      "note": ""
+    },
+    {
+      "id": "a3",
+      "x": 0.8667,
+      "y": 0.825,
+      "label": "the old table",
+      "question": "Whose table was this?",
+      "sound": "room_tone",
+      "note": ""
+    }
+  ],
+  "source": {
+    "analysis": "manual",
+    "model": null
+  }
+}
