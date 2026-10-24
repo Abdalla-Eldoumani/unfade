@@ -11,6 +11,7 @@ import { Hub } from './hub.js';
 import { Hud } from './hud.js';
 import { MemoryScene } from './memory-scene.js';
 import { PeerAvatars } from './presence.js';
+import { Readout } from './readout.js';
 import { Stage, xrSupported } from './stage.js';
 import { loadFonts } from './text.js';
 import { XRInput } from './xr-input.js';
@@ -45,6 +46,8 @@ class World {
     this.hud = new Hud(document.getElementById('hud'));
     this.hud.showLoading('Warming up the darkroom');
     this.stage = new Stage(document.getElementById('stage'));
+    // early, so errors while loading are caught too
+    if (params.has('debug')) this.readout = new Readout(this.stage.camera);
     this.audio = createAudio();
     this.hub = new Hub();
     this.stage.scene.add(this.hub.group);
@@ -221,6 +224,7 @@ class World {
       this.lastHud = t;
       this.refreshHud();
     }
+    this.readout?.update(this.stage.renderer.info.render, presenting);
   }
 
   placeForHeadset() {
