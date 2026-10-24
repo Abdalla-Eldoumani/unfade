@@ -1,0 +1,150 @@
+/* Design tokens. docs/DESIGN.md explains where each one is used. */
+@font-face {
+  font-family: 'Young Serif';
+  src: url('/fonts/young-serif-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Caveat';
+  src: url('/fonts/caveat-latin-500-normal.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Caveat';
+  src: url('/fonts/caveat-latin-600-normal.woff2') format('woff2');
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('/fonts/ibm-plex-mono-latin-400-normal.woff2') format('woff2');
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IBM Plex Mono';
+  src: url('/fonts/ibm-plex-mono-latin-500-normal.woff2') format('woff2');
+  font-weight: 500;
+  font-display: swap;
+}
+
+:root {
+  /* darkroom */
+  --ink-0: #0c0907;
+  --ink-1: #15100d;
+  --ink-2: #211915;
+  --line: #3a2d26;
+  /* instant-print paper */
+  --paper: #f1e9dc;
+  --paper-2: #d9cfc0;
+  --paper-3: #9c8f80;
+  /* light */
+  --safelight: #c8412b;
+  --safelight-glow: #ff6a3d;
+  --ember: #f0a35e;
+  /* age casts used on faded images */
+  --faded-cyan: #a7c4c0;
+  --faded-rose: #d7afaf;
+
+  --font-display: 'Young Serif', Georgia, serif;
+  --font-hand: 'Caveat', 'Segoe Print', cursive;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+
+  --step-0: 12px;
+  --step-1: 14px;
+  --step-2: 18px;
+  --step-3: 24px;
+  --step-4: 32px;
+  --step-5: 48px;
+  --step-6: 72px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --space-8: 64px;
+
+  --radius: 2px;
+  --ease-develop: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --t-ui: 140ms;
+  --t-develop: 900ms;
+
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--ink-0);
+  color: var(--paper);
+  font-family: var(--font-mono);
+  font-size: var(--step-1);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Film-edge label: small caps along the rebate of a negative. */
+.edge {
+  font-family: var(--font-mono);
+  font-size: var(--step-0);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--paper-3);
+}
+
+button,
+.button {
+  font: 500 var(--step-1) / 1 var(--font-mono);
+  letter-spacing: 0.04em;
+  color: var(--ink-0);
+  background: var(--paper);
+  border: 1px solid var(--paper);
+  border-radius: var(--radius);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  transition: background var(--t-ui) ease-out, color var(--t-ui) ease-out, border-color var(--t-ui) ease-out;
+}
+button:hover,
+.button:hover {
+  background: var(--ember);
+  border-color: var(--ember);
+}
+button.ghost,
+.button.ghost {
+  color: var(--paper);
+  background: transparent;
+  border-color: var(--line);
+}
+button.ghost:hover,
+.button.ghost:hover {
+  border-color: var(--paper-2);
+  background: var(--ink-2);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+:focus-visible {
+  outline: 2px solid var(--safelight-glow);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 1ms !important;
+    animation-duration: 1ms !important;
+  }
+}
