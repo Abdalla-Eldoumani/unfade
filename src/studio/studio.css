@@ -83,14 +83,23 @@ a {
   display: block;
 }
 
-.print[data-state='loaded'] .print-photo {
-  filter: saturate(0.25) contrast(0.85) brightness(1.08) sepia(0.15);
+.print-photo {
   transition: filter var(--t-develop) var(--ease-develop);
 }
 
+/* the colour stays out until the print has come up through the cream */
+.print[data-state='loaded'] .print-photo,
 .print[data-state='developing'] .print-photo {
-  filter: saturate(0.6) contrast(0.92) brightness(1.04);
-  transition: filter 4s var(--ease-develop);
+  filter: saturate(0.25) contrast(0.85) brightness(1.08) sepia(0.15);
+}
+
+/* the blank print the photo comes up through; main.js animates its opacity */
+.print-cream {
+  position: absolute;
+  inset: 0;
+  background: #e9e1d3;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .print-drop {
@@ -179,6 +188,36 @@ a {
 
 .anchor-dot:active {
   cursor: grabbing;
+}
+
+/* a new develop replaces the spots, so the old ones go under the cream with the photo */
+.print[data-state='developing'] .anchors {
+  visibility: hidden;
+}
+
+/* after developing, the spots come up one after another */
+.anchors.arriving .anchor-dot {
+  animation: spot-arrives var(--t-develop) var(--ease-develop) backwards;
+  animation-delay: calc(var(--i) * 450ms);
+}
+
+@keyframes spot-arrives {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+@keyframes spot-fades-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anchors.arriving .anchor-dot {
+    animation-name: spot-fades-in;
+  }
 }
 
 /* ---- the steps -------------------------------------------------------- */
