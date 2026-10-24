@@ -1,0 +1,219 @@
+import * as THREE from 'three';
+import { fileUrl, loadDepth } from '../shared/memories.js';
+import { AnchorMarker } from './anchors.js';
+import { buildDepthMesh } from './depth-mesh.js';
+import { makeParticles } from './particles.js';
+import { memoryMaterial, peripheryMaterial } from './shaders.js';
+import { FONTS, disposeMesh, makeText } from './text.js';
+
+const BLOOM_S = 2.2;
+const BLOOM_RADIUS = 0.45;
+const REVIVE_S = 2.6;
+const loader = new THREE.TextureLoader();
+
+// One memory, stood up in 3D around the viewer. Owns its anchors, blooms,
+// haze and particles; knows nothing about input or networking.
+export class MemoryScene {
+  constructor({ maxAnisotropy = 4 } = {}) {
+    this.group = new THREE.Group();
+    this.group.name = 'memory';
+    this.maxAnisotropy = maxAnisotropy;
+    this.item = null;
+    this.anchors = [];
+    this.blooms = [];
+    this.vivid = 0;
+    this.vividTarget = 0;
+    this.fadeIn = 0;
+    this.revived = false;
+    this.revivedAt = 0;
+    this.titleCard = null;
+    this.intro = null;
+    this.t = 0;
+  }
+
+  get spec() {
+    return this.item?.spec;
+  }
+
+  async load(item) {
+    this.dispose();
+    this.item = item;
+    const { spec } = item;
+    const [photo, depth] = await Promise.all([
+      loader.loadAsync(fileUrl(item, 'photo')),
+      loadDepth(fileUrl(item, 'depth')),
+    ]);
+    photo.colorSpace = THREE.SRGBColorSpace;
+    photo.anisotropy = this.maxAnisotropy;
+    photo.generateMipmaps = true;
+    photo.minFilter = THREE.LinearMipmapLinearFilter;
+
+    this.built = buildDepthMesh(spec, depth);
+    const { geometry, tanH, tanV, aspect } = this.built;
+
+    this.material = memoryMaterial(photo, { aspect, palette: spec.palette });
+    this.mesh = new THREE.Mesh(geometry, this.material);
+    this.mesh.frustumCulled = false;
+    this.group.add(this.mesh);
+
+    const base = new THREE.Color(spec.palette.at(-1) || '#2b1d16').multiplyScalar(0.35);
+    const maxDim = Math.max(spec.photo.width, spec.photo.height);
+    const shared = { tanH, tanV, base, maxDim, aspect, bloom: this.material.uniforms.uBloom };
+    this.periphery = new THREE.Mesh(new THREE.SphereGeometry(60, 48, 24), peripheryMaterial(photo, shared));
+    this.periphery.renderOrder = -1;
+    this.group.add(this.periphery);
+
+    this.particles = makeParticles(spec.scene.particles, spec.palette);
+    if (this.particles) this.group.add(this.particles);
+
+    const anchors = spec.anchors.length
+      ? spec.anchors
+      : [{ id: 'center', x: 0.5, y: 0.5, label: 'this moment', question: 'What do you remember here?', sound: 'none', note: '' }];
+    for (const a of anchors) {
+      const p = this.built.pointAt(a.x, a.y).multiplyScalar(0.94);
+      const marker = new AnchorMarker(a, p);
+      if (a.note) marker.addNote(a.note, '');
+      this.anchors.push(marker);
+      this.blooms.push({ r: 0, w: 0, active: false });
+      this.group.add(marker.group);
+    }
+
+    this.intro = makeText('Look at a light to bring it back', { font: FONTS.hand(64, 500), lineHeightM: 0.05, maxChars: 34 });
+    this.intro.position.set(0, -0.42, -1.4);
+    this.intro.material.opacity = 0;
+    this.group.add(this.intro);
+
+    this.vivid = 0;
+    this.vividTarget = 0;
+    this.revived = false;
+    return this;
+  }
+
+  // Stand the memory around the viewer: its camera position is their eyes.
+  placeAt(position, yaw) {
+    this.group.position.copy(position);
+    this.group.rotation.set(0, yaw, 0);
+  }
+
+  anchorById(id) {
+    return this.anchors.findIndex((a) => a.id === id);
+  }
+
+  bloom(anchorId, t = this.t) {
+    const i = this.anchorById(anchorId);
+    if (i < 0 || this.anchors[i].bloomed) return false;
+    this.anchors[i].bloom(t);
+    this.blooms[i] = { r: 0, w: 1, active: true, start: t };
+    if (this.anchors.every((a) => a.bloomed)) this.revive(t);
+    return true;
+  }
+
+  revive(t = this.t) {
+    if (this.revived) return;
+    this.revived = true;
+    this.revivedAt = t;
+    this.vividTarget = 1;
+    const s = this.spec;
+    const lines = [s.title, [s.when, s.where].filter(Boolean).join(' · ')].filter(Boolean).join('\n');
+    this.titleCard = makeText(lines, { font: FONTS.hand(64, 600), lineHeightM: 0.075, maxChars: 26 });
+    this.titleCard.position.set(0, -0.32, -1.25);
+    this.titleCard.material.opacity = 0;
+    this.group.add(this.titleCard);
+  }
+
+  addNote(anchorId, text, author) {
+    const i = this.anchorById(anchorId);
+    const marker = this.anchors[i >= 0 ? i : 0];
+    marker?.addNote(text, author);
+  }
+
+  nudge(anchorId) {
+    const i = this.anchorById(anchorId);
+    if (i >= 0) this.anchors[i].pulse();
+  }
+
+  // rays: [{ origin, direction }] from the head and any pointers.
+  // Returns the ids of anchors whose look just completed.
+  update(dt, t, headPos, rays, pointScale) {
+    this.t = t;
+    const done = [];
+    // a short grace period, so the faded memory is seen before anything returns
+    const settled = t - (this.enteredAt ?? t) > 2.5;
+    for (const marker of this.anchors) {
+      const looked = settled && rays.some((r) => marker.isLookedAt(r.origin, r.direction));
+      if (marker.update(dt, t, headPos, looked)) done.push(marker.id);
+    }
+    const u = this.material.uniforms;
+    this.blooms.forEach((b, i) => {
+      if (b.active) b.r = Math.min(BLOOM_RADIUS, BLOOM_RADIUS * easeOut(Math.min(1, (t - b.start) / BLOOM_S)));
+      const a = this.anchors[i].anchor;
+      u.uBloom.value[i].set(a.x, 1 - a.y, b.r, b.w);
+    });
+    if (this.vivid < this.vividTarget) this.vivid = Math.min(this.vividTarget, this.vivid + dt / REVIVE_S);
+    const bloomed = this.anchors.filter((a) => a.bloomed).length / this.anchors.length;
+    const vividAll = Math.max(this.vivid, bloomed * 0.6);
+    u.uVivid.value = this.vivid;
+    u.uTime.value = t;
+    u.uFadeIn.value = this.fadeIn;
+    const pu = this.periphery.material.uniforms;
+    pu.uVivid.value = vividAll;
+    pu.uCore.value = this.vivid;
+    pu.uFadeIn.value = this.fadeIn;
+    if (this.particles) {
+      const pm = this.particles.material.uniforms;
+      pm.uTime.value = t;
+      pm.uScale.value = pointScale;
+      pm.uOpacity.value = this.fadeIn * (0.25 + 0.75 * vividAll);
+    }
+    if (this.intro) {
+      const shown = t - (this.enteredAt ?? t);
+      this.intro.material.opacity = this.fadeIn * Math.max(0, Math.min(1, shown - 0.8) - Math.max(0, (shown - 6) / 1.5));
+      this.intro.lookAt(headPos);
+    }
+    if (this.titleCard) {
+      const k = t - this.revivedAt;
+      this.titleCard.material.opacity = Math.min(1, Math.max(0, (k - 1.2) / 1.2)) * (k > 9 ? Math.max(0.35, 1 - (k - 9) / 2) : 1);
+      this.titleCard.lookAt(headPos);
+    }
+    return done;
+  }
+
+  reset() {
+    this.anchors.forEach((a, i) => {
+      a.bloomed = false;
+      a.dwell = 0;
+      a.ring.material.uniforms.uOpacity.value = 0.9;
+      a.question.material.opacity = 1;
+      a.glow.scale.setScalar(0.22 * a.scale);
+      this.blooms[i] = { r: 0, w: 0, active: false };
+    });
+    this.revived = false;
+    this.vivid = 0;
+    this.vividTarget = 0;
+    if (this.titleCard) {
+      this.group.remove(this.titleCard);
+      disposeMesh(this.titleCard);
+      this.titleCard = null;
+    }
+  }
+
+  progress() {
+    return { bloomed: this.anchors.filter((a) => a.bloomed).length, total: this.anchors.length };
+  }
+
+  dispose() {
+    for (const child of [...this.group.children]) {
+      this.group.remove(child);
+      disposeMesh(child);
+    }
+    this.anchors = [];
+    this.blooms = [];
+    this.titleCard = null;
+    this.intro = null;
+    this.item = null;
+  }
+}
+
+function easeOut(x) {
+  return 1 - Math.pow(1 - x, 3);
+}
