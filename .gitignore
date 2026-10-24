@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.cert/
+data/
+public/models/
+public/ort/
+xr-shots/
+.claude/settings.local.json
+.DS_Store
+*.log
+.env
+.env.*
