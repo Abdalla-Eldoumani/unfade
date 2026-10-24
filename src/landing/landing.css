@@ -1,0 +1,218 @@
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(1000px 520px at 50% -12%, rgba(200, 65, 43, 0.22), transparent 62%),
+    var(--ink-0);
+}
+
+.landing {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-5) var(--space-8);
+}
+
+.masthead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2) var(--space-5);
+}
+
+.brand {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: var(--step-6);
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.tagline {
+  margin: 0;
+  font-family: var(--font-hand);
+  font-weight: 500;
+  font-size: var(--step-4);
+  color: var(--ember);
+}
+
+/* A strip of negative film laid on the light table: sprocket holes along
+   both edges, frames in between, labels in grease pencil. */
+.sheet {
+  margin: var(--space-7) calc(var(--space-5) * -1) 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.strip {
+  --hole: 10px;
+  list-style: none;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(220px, 1fr));
+  gap: 18px;
+  padding: 30px 26px;
+  min-width: 960px;
+  background:
+    radial-gradient(circle at center, var(--ink-0) 0 calc(var(--hole) / 2 - 1px), transparent calc(var(--hole) / 2)) 0 9px / 26px 14px repeat-x,
+    radial-gradient(circle at center, var(--ink-0) 0 calc(var(--hole) / 2 - 1px), transparent calc(var(--hole) / 2)) 0 calc(100% - 9px) / 26px 14px repeat-x,
+    linear-gradient(180deg, #2a1d16, #1d140f);
+  border-top: 1px solid #3f2c22;
+  border-bottom: 1px solid #120c09;
+  box-shadow: 0 30px 70px rgba(0, 0, 0, 0.55);
+  transform: rotate(-0.4deg);
+}
+
+.frame {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
+  align-content: start;
+  gap: var(--space-2);
+  padding: 10px 10px 14px;
+  cursor: pointer;
+}
+
+.frame-num {
+  color: #b77a4c;
+}
+
+.frame-img {
+  display: block;
+  aspect-ratio: 4 / 3;
+  background: #3a2a20 center / cover no-repeat;
+  outline: 1px solid rgba(0, 0, 0, 0.5);
+  filter: saturate(0.18) contrast(0.8) brightness(1.15) sepia(0.25);
+  transition: filter var(--t-develop) var(--ease-develop);
+}
+
+.frame:nth-child(4) .frame-img {
+  background-image: radial-gradient(ellipse at 50% 60%, rgba(240, 163, 94, 0.35), transparent 60%), linear-gradient(#2c211b, #1a120e);
+}
+
+.frame:hover .frame-img,
+.frame:focus-within .frame-img {
+  filter: none;
+}
+
+.frame-label {
+  justify-self: start;
+  font-family: var(--font-hand);
+  font-weight: 600;
+  font-size: var(--step-4);
+  line-height: 1;
+  color: var(--paper);
+  text-decoration: none;
+}
+
+/* the china-marker circle someone draws around the frame they want */
+.frame-label::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border: 2px solid var(--safelight-glow);
+  border-radius: 46% 54% 50% 50% / 52% 46% 54% 48%;
+  opacity: 0;
+  transform: scale(0.96) rotate(-1.5deg);
+  transition: opacity var(--t-ui) ease-out, transform 260ms var(--ease-develop);
+  pointer-events: none;
+}
+
+.frame:hover .frame-label::after,
+.frame-label:focus-visible::after {
+  opacity: 0.9;
+  transform: scale(1) rotate(-1.5deg);
+}
+
+.frame-label:focus-visible {
+  outline: none;
+}
+
+.frame-note {
+  font-size: var(--step-0);
+  letter-spacing: 0.04em;
+  color: var(--paper-3);
+}
+
+.how {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--space-7);
+  margin-top: var(--space-8);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--line);
+}
+
+.how .edge {
+  margin: 0 0 var(--space-2);
+}
+
+.headset-url {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  font: 500 var(--step-3) / 1.25 var(--font-mono);
+  color: var(--paper);
+  overflow-wrap: anywhere;
+}
+
+.how-small {
+  margin: var(--space-3) 0 0;
+  font-size: var(--step-0);
+  line-height: 1.6;
+  color: var(--paper-3);
+}
+
+.room-form input {
+  width: 100%;
+  font: 500 var(--step-3) / 1.2 var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--paper);
+  background: var(--ink-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+}
+
+.room-form input:focus {
+  outline: none;
+  border-color: var(--ember);
+}
+
+.server-line {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .landing {
+    padding: var(--space-6) var(--space-4) var(--space-8);
+  }
+  .brand {
+    font-size: var(--step-5);
+  }
+  .tagline {
+    font-size: var(--step-3);
+  }
+  .sheet {
+    margin-left: calc(var(--space-4) * -1);
+    margin-right: calc(var(--space-4) * -1);
+  }
+  .strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
+    gap: 10px;
+    padding: 28px 12px;
+    transform: none;
+  }
+  .frame-label {
+    font-size: var(--step-3);
+  }
+  .how {
+    grid-template-columns: 1fr;
+    gap: var(--space-5);
+  }
+  .headset-url {
+    font-size: var(--step-2);
+  }
+}
