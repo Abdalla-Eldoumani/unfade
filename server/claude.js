@@ -101,6 +101,20 @@ function cleanAnalysis(raw, width, height) {
   };
 }
 
+// Every failure is one plain sentence: the server hands it to the studio as the
+// reason the person places the spots themselves. The status stays in brackets
+// for whoever reads the server's log.
+function failed(reason) {
+  return new Error(`${reason}, so place the spots yourself by tapping the photo.`);
+}
+
+function failedStatus(status, detail) {
+  if (status === 401 || status === 403) return failed(`Claude did not accept the API key (${status})`);
+  if (status === 429) return failed('Claude has had too many photos for now (429)');
+  if (status >= 500) return failed(`Claude is having trouble right now (${status})`);
+  return failed(`Claude could not read this photo (${status}: ${detail})`);
+}
+
 export async function analyzeWithClaude({ base64, mediaType, width, height, hints = {} }) {
   const lines = [`This photo is ${width} by ${height} pixels.`];
   if (hints.title) lines.push(`The person titled it: "${String(hints.title).slice(0, 60)}".`);
@@ -131,15 +145,22 @@ export async function analyzeWithClaude({ base64, mediaType, width, height, hint
         },
       ],
     }),
+  }).catch((err) => {
+    throw err.name === 'TimeoutError'
+      ? failed(`Claude took longer than ${TIMEOUT_MS / 1000} seconds to answer`)
+      : failed(`Claude could not be reached from this laptop (${err.cause?.code || err.message})`);
   });
   const body = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    throw new Error(`Claude returned ${res.status}: ${body?.error?.message || 'no details'}`);
-  }
+  if (!res.ok) throw failedStatus(res.status, body?.error?.message || 'no details');
   if (body.stop_reason && !['end_turn', 'stop_sequence'].includes(body.stop_reason)) {
-    throw new Error(`Claude stopped early (${body.stop_reason})`);
+    throw failed(`Claude's answer was cut short (${body.stop_reason})`);
   }
   const text = (body.content || []).find((b) => b.type === 'text')?.text;
-  if (!text) throw new Error('Claude sent no text block');
-  return cleanAnalysis(JSON.parse(text), width, height);
+  let raw = null;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    throw failed("Claude's answer could not be read");
+  }
+  return cleanAnalysis(raw, width, height);
 }
