@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 
+// Pixels per eye against the headset's own default, fixed when the session
+// starts. The second lever if the headset drops frames: try 0.8.
+const FRAMEBUFFER_SCALE = 1;
+
 // Renderer, scene and camera, shared by the darkroom and the memories.
 // On a headset WebXR drives the camera; on a laptop or phone the desktop
 // controls do.
@@ -12,6 +16,7 @@ export class Stage {
     this.renderer.xr.enabled = true;
     this.renderer.xr.setReferenceSpaceType('local-floor');
     this.renderer.xr.setFoveation(1);
+    this.renderer.xr.setFramebufferScaleFactor(FRAMEBUFFER_SCALE);
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
