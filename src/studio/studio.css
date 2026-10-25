@@ -121,7 +121,11 @@ a {
   gap: var(--space-2);
   color: #6f6255;
   cursor: pointer;
-  /* it is a label, and the label rule's capitals belong to the mono labels, not the handwriting */
+}
+
+/* it is a label, and the label rule's capitals belong to the mono labels, not
+   the handwriting; .print-window in front so it outranks label:not(.button) */
+.print-window .print-drop {
   text-transform: none;
   letter-spacing: 0;
 }
