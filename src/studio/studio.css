@@ -520,3 +520,84 @@ label.sound {
     position: static;
   }
 }
+
+/* Until there is a photo, Develop waits as an outline, so the empty print is
+   what draws the eye first. */
+.develop:disabled:not(.ghost) {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--paper-3);
+  opacity: 1;
+}
+
+/* A phone cannot drop a file, so it is only asked to choose one. */
+.drop-touch {
+  display: none;
+}
+@media (hover: none) {
+  .drop-pointer {
+    display: none;
+  }
+  .drop-touch {
+    display: inline;
+  }
+}
+
+/* The world the headset builds around the photo, from the same fields. */
+.surroundings {
+  margin: var(--space-5) 0 0;
+}
+.surroundings-view {
+  aspect-ratio: 4 / 1;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background-color: var(--ink-2);
+  background-repeat: repeat-x;
+  background-size: 200% auto;
+  /* blurred at the edges the way it is in the headset, sharper in the middle */
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 18%, #000 82%, transparent);
+  transition: background-image var(--t-develop) var(--ease-develop);
+}
+.surroundings figcaption {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+.surroundings-name {
+  font-family: var(--font-hand);
+  font-size: var(--step-3);
+  color: var(--paper);
+}
+
+.scene-more {
+  margin-top: var(--space-4);
+}
+.scene-more summary {
+  cursor: pointer;
+  list-style: none;
+  font-size: var(--step-0);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--paper-3);
+}
+.scene-more summary::-webkit-details-marker {
+  display: none;
+}
+.scene-more summary::before {
+  content: '+';
+  display: inline-block;
+  width: 1.4em;
+  color: var(--ember);
+}
+.scene-more[open] summary::before {
+  content: '\2212';
+}
+.scene-more summary:hover {
+  color: var(--paper);
+}
+.scene-more .scene {
+  margin-top: var(--space-4);
+}
