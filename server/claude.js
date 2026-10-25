@@ -11,9 +11,11 @@ import {
 // Reads one photo with Claude and returns scene settings plus up to three
 // anchors. The key only ever comes from the environment.
 const API_URL = 'https://api.anthropic.com/v1/messages';
-export const MODEL = process.env.UNFADE_MODEL || 'claude-sonnet-5-5';
+// Opus places the spots more exactly and keeps to the question rules better;
+// a few seconds slower than Sonnet, which the studio's progress covers.
+export const MODEL = process.env.UNFADE_MODEL || 'claude-opus-5-5';
 const EFFORT = process.env.UNFADE_EFFORT || 'low';
-const TIMEOUT_MS = 30000;
+const TIMEOUT_MS = 45000;
 
 const SYSTEM = `You help a person step back into one of their own photos inside a VR headset. They will stand inside a 3D version of this photo. It starts faded, and each anchor you choose is a spot that brings part of the memory back when they look at it.
 
@@ -143,7 +145,7 @@ export async function analyzeWithClaude({ base64, mediaType, width, height, hint
     body: JSON.stringify({
       model: MODEL,
       // thinking counts toward this cap, so leave room past the short reply
-      max_tokens: 4000,
+      max_tokens: 8000,
       system: SYSTEM,
       output_config: { effort: EFFORT, format: { type: 'json_schema', schema: SCHEMA } },
       messages: [
