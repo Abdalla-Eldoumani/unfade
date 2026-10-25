@@ -117,6 +117,9 @@ a {
   gap: var(--space-2);
   color: #6f6255;
   cursor: pointer;
+  /* it is a label, and the label rule's capitals belong to the mono labels, not the handwriting */
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .print-drop input {
@@ -126,8 +129,9 @@ a {
   cursor: pointer;
 }
 
+/* 5:1 on the cream, where #8a7c6c was 2.9:1 at 12 px */
 .print-drop .edge {
-  color: #8a7c6c;
+  color: #64564a;
 }
 
 .print-drop-big {
