@@ -5,6 +5,7 @@ import { backgroundPlate, buildDepthMesh, plateSize } from './depth-mesh.js';
 import { makeParticles } from './particles.js';
 import { memoryMaterial, peripheryMaterial } from './shaders.js';
 import { FONTS, disposeMesh, glowMap, makeText } from './text.js';
+import { WorldSplat } from './world-splat.js';
 
 const BLOOM_S = 2.2;
 const BLOOM_RADIUS = 0.45;
@@ -17,15 +18,19 @@ const TITLE_AFTER_S = 2.4;
 // at what the nearer thing hides (the background plate, depth-mesh.js) rather
 // than a blurred copy of the nearer thing. false switches it off.
 const GAP_FILL = true;
+// A bloom's reach in a generated world, in metres, when fully open.
+const SPLAT_BLOOM_M = 1.4;
 const loader = new THREE.TextureLoader();
 
 // One memory, stood up in 3D around the viewer. Owns its anchors, blooms,
 // haze and particles; knows nothing about input or networking.
 export class MemoryScene {
-  constructor({ maxAnisotropy = 4 } = {}) {
+  constructor({ maxAnisotropy = 4, stage = null } = {}) {
     this.group = new THREE.Group();
     this.group.name = 'memory';
     this.maxAnisotropy = maxAnisotropy;
+    this.stage = stage;
+    this.splat = null;
     this.item = null;
     this.anchors = [];
     this.blooms = [];
@@ -87,6 +92,25 @@ export class MemoryScene {
     this.periphery = new THREE.Mesh(new THREE.SphereGeometry(60, 48, 24), peripheryMaterial(photo, shared));
     this.periphery.renderOrder = -1;
     this.group.add(this.periphery);
+
+    // A generated world replaces the photo sheet and the haze: it already
+    // holds the photo's view and everything around it. If it fails to load,
+    // the sheet and haze stay, so there is never nothing to see.
+    if (spec.world && this.stage) {
+      const splat = new WorldSplat();
+      try {
+        const mesh = await splat.load(spec.world, { stage: this.stage, xr: this.stage.renderer.xr.isPresenting });
+        if (this.item === item) {
+          this.splat = splat;
+          this.group.add(mesh);
+          this.mesh.visible = false;
+          this.periphery.visible = false;
+        } else splat.dispose();
+      } catch (err) {
+        console.warn('the world did not load; showing the photo instead:', err.message);
+        splat.dispose();
+      }
+    }
 
     this.particles = makeParticles(spec.scene.particles, spec.palette);
     if (this.particles) this.group.add(this.particles);
@@ -218,6 +242,13 @@ export class MemoryScene {
     pu.uVivid.value = vividAll;
     pu.uCore.value = this.vivid;
     pu.uFadeIn.value = this.fadeIn;
+    if (this.splat) {
+      this.splat.setVivid(this.vivid);
+      this.splat.setBlooms(this.blooms.map((b, i) => ({
+        position: this.anchors[i].group.getWorldPosition(new THREE.Vector3()),
+        radius: (b.r / BLOOM_RADIUS) * SPLAT_BLOOM_M * b.w,
+      })));
+    }
     if (this.particles) {
       const pm = this.particles.material.uniforms;
       pm.uTime.value = t;
@@ -263,6 +294,8 @@ export class MemoryScene {
   }
 
   dispose() {
+    this.splat?.dispose();
+    this.splat = null;
     for (const child of [...this.group.children]) {
       this.group.remove(child);
       disposeMesh(child);
