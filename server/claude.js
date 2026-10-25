@@ -29,6 +29,7 @@ What you write must stay true to the photo:
 - lens: main unless the photo is clearly a selfie, an ultrawide shot or a zoomed shot.
 - anchors: one to three specific visible things worth remembering, spread apart: a person, an object, a light, a detail in the background. For each give x and y in pixels of this image (origin at the top left), a plain label of at most 4 words ("the candles", "the man on the left", "the window"), and a question.
 - Each question asks the person something only they can know about that thing. Ask, never tell. At most 9 words, second person, plain words, no exclamation marks. Good: "Who lit these candles?", "What was playing outside?", "What were you laughing at?" Bad: "What a wonderful evening!", "Your grandmother baked this cake."
+- Keep every question warm and curious about the good parts of the moment: the people, what they were doing, what they could hear, smell or taste, a small detail. Never ask about loss, death, illness, absence or regret, and never suggest that anyone or anything is gone, even when the photo looks old or a place looks empty.
 - sound for an anchor: a layer from the list that this thing makes or sits in, or none.`;
 
 const SCHEMA = {
