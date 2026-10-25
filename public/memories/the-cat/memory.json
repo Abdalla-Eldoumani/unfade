@@ -1,24 +1,24 @@
 {
   "spec": 1,
   "id": "the-cat",
-  "title": "That dinner",
+  "title": "The proposal",
   "when": "",
   "where": "",
   "createdAt": "2026-10-24T06:00:00.000Z",
   "photo": {
     "src": "photo.jpg",
-    "width": 900,
+    "width": 1200,
     "height": 1200
   },
   "thumb": {
     "src": "thumb.jpg",
-    "width": 225,
+    "width": 300,
     "height": 300
   },
   "depth": {
     "src": "depth.png",
     "width": 518,
-    "height": 686,
+    "height": 518,
     "encoding": "rg16-disparity"
   },
   "camera": {
@@ -26,46 +26,46 @@
     "focal35mm": null
   },
   "scene": {
-    "scale": "room",
-    "light": "warm_indoor",
-    "particles": "dust",
+    "scale": "landscape",
+    "light": "golden",
+    "particles": "petals",
     "soundLayers": [
-      "room_tone",
-      "cutlery"
+      "wind",
+      "waves"
     ]
   },
   "palette": [
-    "#8B6B4A",
-    "#C4956A",
-    "#5C3D24",
-    "#D4A87B",
-    "#3E2714"
+    "#D4956B",
+    "#E8B88A",
+    "#5C6B4A",
+    "#F2C8A0",
+    "#2E3828"
   ],
   "anchors": [
     {
       "id": "a1",
-      "x": 0.5,
-      "y": 0.4,
-      "label": "the table",
-      "question": "Who was sitting across from you?",
+      "x": 0.42,
+      "y": 0.52,
+      "label": "the moment",
+      "question": "What were you feeling right then?",
       "sound": "none",
       "note": ""
     },
     {
       "id": "a2",
-      "x": 0.35,
-      "y": 0.65,
-      "label": "the food",
-      "question": "What were you eating that night?",
-      "sound": "none",
+      "x": 0.65,
+      "y": 0.15,
+      "label": "the sunset",
+      "question": "What did you say first?",
+      "sound": "waves",
       "note": ""
     },
     {
       "id": "a3",
-      "x": 0.7,
-      "y": 0.25,
-      "label": "the setting",
-      "question": "What was the occasion?",
+      "x": 0.25,
+      "y": 0.75,
+      "label": "the flowers",
+      "question": "Who helped set this up?",
       "sound": "none",
       "note": ""
     }
