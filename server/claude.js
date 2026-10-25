@@ -116,6 +116,11 @@ function failedStatus(status, detail) {
 }
 
 export async function analyzeWithClaude({ base64, mediaType, width, height, hints = {} }) {
+  // Node trims spaces and line breaks off the ends of a header but refuses any other stray
+  // character (a paste into the terminal can leave one), and its error quotes the whole key
+  if (/[^\x20-\x7e]/.test((process.env.ANTHROPIC_API_KEY || '').replace(/^[\t\n\r ]+|[\t\n\r ]+$/g, ''))) {
+    throw failed('The API key on the server has a stray character in it (set it again where the server runs)');
+  }
   const lines = [`This photo is ${width} by ${height} pixels.`];
   if (hints.title) lines.push(`The person titled it: "${String(hints.title).slice(0, 60)}".`);
   if (hints.when) lines.push(`When, in their words: "${String(hints.when).slice(0, 40)}".`);
@@ -146,9 +151,10 @@ export async function analyzeWithClaude({ base64, mediaType, width, height, hint
       ],
     }),
   }).catch((err) => {
+    // the code or the name only: a message about the request can quote its headers
     throw err.name === 'TimeoutError'
       ? failed(`Claude took longer than ${TIMEOUT_MS / 1000} seconds to answer`)
-      : failed(`Claude could not be reached from this laptop (${err.cause?.code || err.message})`);
+      : failed(`Claude could not be reached from this laptop (${err.cause?.code || err.name})`);
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw failedStatus(res.status, body?.error?.message || 'no details');

@@ -57,6 +57,7 @@ const state = {
   model: null,
   developed: false,
   developedWords: '',
+  taps: [],
 };
 
 function fillSelect(select, values, labels) {
@@ -134,6 +135,7 @@ async function loadFile(file) {
   }
   state.photoUrl = jpegDataUrl(state.photo, 0.9);
   state.anchors = [];
+  state.taps = [];
   state.depth = null;
   state.developed = false;
   el.photo.src = state.photoUrl;
@@ -168,10 +170,16 @@ for (const input of [el.title, el.when, el.where]) {
   });
 }
 
+// half of .anchor-dot's 34 px: a tap this close to a spot is on it
+const DOT_RADIUS_PX = 17;
+
 async function develop() {
   if (!state.photo) return;
   el.develop.disabled = true;
+  // a spot added now would be replaced by the new ones
+  el.addSpot.disabled = true;
   state.developed = false;
+  state.taps = [];
   el.print.dataset.state = 'developing';
   // on a phone the print has scrolled away by the time Develop is tapped, and the
   // person needs it in view to watch it develop and to touch the spots
@@ -190,10 +198,17 @@ async function develop() {
       stats,
     });
     state.palette = palette(state.photo);
+    // the old spots stay away while the cream clears, so a tap where one was is held too
+    el.anchors.replaceChildren();
     el.print.dataset.state = 'review';
     await print.finish();
     el.anchors.classList.add('arriving');
     applyAnalysis(result);
+    // a held tap that lands on a spot now there is that spot, as it is once developed
+    const r = el.window.getBoundingClientRect();
+    for (const [x, y] of state.taps.splice(0)) {
+      if (!state.anchors.some((a) => Math.hypot((a.x - x) * r.width, (a.y - y) * r.height) < DOT_RADIUS_PX)) addSpot(x, y);
+    }
     setTimeout(() => el.anchors.classList.remove('arriving'), MAX_ANCHORS * 450 + 900);
     state.developed = true;
     state.developedWords = words();
@@ -206,6 +221,8 @@ async function develop() {
     console.error(err);
     print.cancel();
     el.print.dataset.state = 'loaded';
+    // the spots from before, and the button to add one, come back
+    renderAnchors();
     setProgress(err.message);
   } finally {
     el.develop.disabled = state.developed && !canDevelopAgain();
@@ -342,9 +359,12 @@ function dragDot(dot, a) {
 }
 
 el.window.addEventListener('click', (e) => {
-  if (!state.developed || e.target.closest('.anchor-dot')) return;
+  if (e.target.closest('.anchor-dot')) return;
   const r = el.window.getBoundingClientRect();
-  addSpot((e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height);
+  const at = [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
+  if (state.developed) addSpot(...at);
+  // a tap while the print is still coming up waits for its spots, after them and three at most
+  else if (['developing', 'review'].includes(el.print.dataset.state)) state.taps.push(at);
 });
 
 // the keyboard's way to add one: in the middle, focused, ready for the arrow keys
