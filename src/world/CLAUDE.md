@@ -21,7 +21,7 @@
 - In XR three keeps `camera.fov` in step with the headset's projection, but not `camera.aspect` (it stays the window's).
 - `performance.now()` can still be under 1000 on the first frames after load; never treat 0 as "long ago".
 - To film a motion in the emulator, slow the scene clock: `unfade.stage.timer.setTimescale(0.08)`; screenshots are slower than the motion otherwise.
-- In the emulator (mono and stereo) the darkroom's ceiling and floor discs draw over a print held big and close, as if its depth were wrong; cause not found. The rising print draws on top (Print.setOnTop) so the step-in never shows it.
+- In the emulator (mono and stereo) the darkroom's ceiling and floor discs draw over nearer things (the bench, the trays, the bottom and title of a square print, a print held big and close) only while the head is exactly level: each disc's centre vertex then lies in the eye's plane (w = 0). Tilting the head 4 degrees up or down clears it (XR_SOFTWARE=1, 2026-10-25), xr-check's first darkroom frame is exactly level, and a tracked head never is; the desktop view starts at -0.2 rad. The rising print still draws on top (Print.setOnTop).
 
 ## Performance levers (turn in this order if the headset drops frames)
 1. `PARTICLE_SHARE` in particles.js, 1 now, try 0.5. The darkroom dust and every memory's particles.
