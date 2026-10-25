@@ -658,9 +658,8 @@ class World {
         if (this.xrOk) buttons.push({ label: 'Step into the darkroom', note: 'Meta Quest', onClick: () => this.enterXR() });
       }
     } else {
-      const p = this.memory.progress();
-      hint = this.memory.revived ? 'It is back.' : `Look at a light to bring it back · ${p.bloomed} of ${p.total}`;
-      buttons.push({ label: 'Back to the darkroom', kind: 'ghost', onClick: () => this.leaveMemory() });
+      hint = '';
+      buttons.push({ label: 'Back', onClick: () => this.leaveMemory() });
     }
     if (IS_PHONE && !this.desk.motion && !this.stage.presenting) {
       buttons.push({ label: 'Use motion', kind: 'ghost', onClick: () => this.desk.enableMotion() });
