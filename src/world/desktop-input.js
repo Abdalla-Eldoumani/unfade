@@ -21,6 +21,7 @@ export class DesktopInput {
     this.dolly = 0;
     this.mode = 'look';
     this.allowMove = false;
+    this.moveRadius = MOVE_RADIUS;
     this.ndc = new THREE.Vector2(0, 0);
     this.pointerInside = false;
     this.drag = null;
@@ -51,9 +52,11 @@ export class DesktopInput {
     if (this.motion) this.motion.recenter = true;
   }
 
-  setMode(mode, { allowMove = false } = {}) {
+  // radius: how far WASD may go; a generated world holds up much further out.
+  setMode(mode, { allowMove = false, radius = MOVE_RADIUS } = {}) {
     this.mode = mode;
     this.allowMove = allowMove;
+    this.moveRadius = radius;
   }
 
   onDown(e) {
@@ -83,7 +86,7 @@ export class DesktopInput {
       if (this.motion) this.motion.extraYaw += dx * k;
       else {
         this.yaw += dx * k;
-        this.pitch = Math.min(1.2, Math.max(-1.2, this.pitch + (e.clientY - (d.lastY ?? e.clientY)) * k));
+        this.pitch = Math.min(1.5, Math.max(-1.5, this.pitch + (e.clientY - (d.lastY ?? e.clientY)) * k));
       }
     }
     d.lastX = e.clientX;
@@ -167,8 +170,11 @@ export class DesktopInput {
       if (f || s) {
         const fwd = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
         const right = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+        const before = this.offset.clone();
         this.offset.addScaledVector(fwd, f * dt * 0.7).addScaledVector(right, s * dt * 0.7);
-        if (this.offset.length() > MOVE_RADIUS) this.offset.setLength(MOVE_RADIUS);
+        if (this.offset.length() > this.moveRadius) this.offset.setLength(this.moveRadius);
+        // blocked(a, b): the scene says whether the eye may move from a to b
+        if (this.blocked?.(before.clone().add(this.origin), this.offset.clone().add(this.origin))) this.offset.copy(before);
       }
     }
     if (this.motion?.q) {

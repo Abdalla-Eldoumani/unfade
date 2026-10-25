@@ -18,6 +18,7 @@
     "xr-check": "node scripts/xr-check.mjs"
   },
   "dependencies": {
+    "@sparkjsdev/spark": "2.3.1",
     "onnxruntime-web": "1.30.0",
     "three": "0.186.1",
     "ws": "8.22.0"

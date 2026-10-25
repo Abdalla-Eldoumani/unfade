@@ -57,6 +57,9 @@ const el = {
   save: $('.save'),
   download: $('.download'),
   saved: $('.saved'),
+  worldOpt: $('.world-opt'),
+  worldBox: $('.world-opt-box'),
+  worldStatus: $('.world-status'),
   server: $('.studio-server'),
   wiggleToggle: $('.wiggle-toggle'),
   surroundings: $('.surroundings'),
@@ -130,6 +133,8 @@ fetch('/api/health', { signal: AbortSignal.timeout(3000) })
   .then((r) => r.json())
   .then((h) => {
     el.server.textContent = h.claude ? 'Server live · Claude on' : 'Server live · Claude off';
+    // a 3D place is offered only when the server can build one; off unless chosen
+    el.worldOpt.hidden = !h.worlds;
   })
   .catch(() => {
     el.server.textContent = 'No server · files only';
@@ -545,6 +550,7 @@ el.save.addEventListener('click', async () => {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || `server said ${res.status}`);
     el.saved.innerHTML = `“${escapeHtml(body.spec.title)}” is on the line. <a href="/world.html">Open the darkroom</a> or put on the headset.`;
+    if (!el.worldOpt.hidden && el.worldBox.checked) buildWorld(body.spec.id);
   } catch (err) {
     el.saved.textContent = `Could not save: ${err.message}. You can still download the files.`;
   } finally {
@@ -552,6 +558,37 @@ el.save.addEventListener('click', async () => {
     el.save.disabled = false;
   }
 });
+
+// Builds the 3D place around a hung memory (server/worldlabs.js) and says
+// how it is going. The print is already on the line; this never holds it up.
+const WORLD_POLL_MS = 5000;
+const WORLD_GIVE_UP_MS = 16 * 60 * 1000;
+async function buildWorld(id) {
+  const say = (text) => {
+    el.worldStatus.textContent = text;
+    el.worldStatus.hidden = false;
+  };
+  const started = Date.now();
+  say('Building the place around it. This takes about five minutes; you can step in now and it appears next time.');
+  try {
+    let s = await (await fetch(`/api/world/${id}`, { method: 'POST' })).json();
+    while (s.status === 'queued' || s.status === 'pending') {
+      if (Date.now() - started > WORLD_GIVE_UP_MS) {
+        say('The place is still being built. The memory works without it.');
+        return;
+      }
+      await new Promise((r) => setTimeout(r, WORLD_POLL_MS));
+      s = await (await fetch(`/api/world/${id}`)).json();
+      const mins = Math.max(1, 5 - Math.floor((Date.now() - started) / 60000));
+      if (s.status === 'pending') say(`Building the place around it. About ${mins} more minute${mins === 1 ? '' : 's'}.`);
+      if (s.status === 'queued') say('Waiting for another place to finish first.');
+    }
+    if (s.status === 'ready') say('The place around it is ready. Step in again to stand inside it.');
+    else say(`The place could not be built (${s.reason || 'no reason given'}). The memory works without it.`);
+  } catch {
+    say('The place could not be built, because the server stopped answering. The memory works without it.');
+  }
+}
 
 el.download.addEventListener('click', () => {
   if (needsTitle()) return;
