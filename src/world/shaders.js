@@ -251,7 +251,12 @@ export function peripheryMaterial(photo, { tanH, tanV, env, maxDim, aspect, bloo
         vec3 behind = textureLod(uPlate, clamp(uv, 0.0, 1.0), max(0.0, lod - uPlateShift)).rgb;
         c = mix(c, behind, inside * lean * forward);
         #endif
-        col = mix(env, c, w);
+        // Tint the panorama toward the photo's blurred edge colours in
+        // the transition zone, so the colour gradient is continuous
+        vec3 photoEdge = textureLod(uPhoto, clamp(uv, 0.0, 1.0), uLod + 3.0).rgb;
+        float tintZone = (1.0 - smoothstep(0.75, 1.4, edgeD)) * forward;
+        vec3 tintedEnv = mix(env, photoEdge * 0.85, tintZone * 0.55);
+        col = mix(tintedEnv, c, w);
         #if HAZE_DETAIL > 1
         local = mix(uVivid, bloomAt(clamp(uv, 0.0, 1.0), uCore), inside * forward);
         #else
