@@ -2,15 +2,33 @@ import '../shared/tokens.css';
 import './studio.css';
 import { LIGHTS, MAX_ANCHORS, MAX_SOUND_LAYERS, PARTICLES, SCALES, SOUND_LAYERS, normalizeMemory, slugify, validateMemory } from '../shared/contract.js';
 import { applyBrand } from '../shared/brand.js';
+import { ENVIRONMENTS, environmentUrl, pickEnvironment } from '../world/environments.js';
 import { analyzePhoto } from './analyze.js';
 import { depthToPngDataUrl, estimateDepth, loadDepthModel } from './depth.js';
-import { decodeImage, imageStats, jpegDataUrl, palette, readFocal35, resizeToCanvas } from './image.js';
+import { decodeImage, imageStats, jpegDataUrl, palette, readFocal35, resizeToCanvas, videoFrame } from './image.js';
 
 const LABELS = {
   scale: { closeup: 'Up close', room: 'A room', street: 'Outside, nearby', landscape: 'Far and wide' },
   light: { warm_indoor: 'Warm lamp light', cool_indoor: 'Cool indoor light', daylight: 'Daylight', golden_hour: 'Golden hour', overcast: 'Overcast', night: 'Night', candlelight: 'Candlelight' },
   particles: { dust: 'Dust in the light', snow: 'Snow', rain: 'Rain', fireflies: 'Fireflies', confetti: 'Confetti', petals: 'Petals', mist: 'Mist', none: 'Nothing' },
   sounds: { room_tone: 'A quiet room', wind: 'Wind', rain: 'Rain', waves: 'Waves', stream: 'Running water', fire: 'A fire', birds: 'Birds', crickets: 'Crickets', city: 'The city', night_air: 'Night air' },
+  surroundings: {
+    fireplace: 'A room by the fire',
+    warm_restaurant_night: 'A warm room at night',
+    wooden_lounge: 'A warm wooden room',
+    lebombo: 'A bright room',
+    ballroom: 'A hall for a party',
+    urban_street_01: 'A city street',
+    vignaioli_night: 'A town square at night',
+    meadow_2: 'A meadow',
+    misty_pines: 'A misty forest',
+    spiaggia_di_mondello: 'A beach',
+    the_sky_is_on_fire: 'The sea at sunset',
+    spruit_sunrise: 'A field at golden hour',
+    alps_field: 'Mountains',
+    snowy_park_01: 'A snowy park',
+    satara_night_no_lamps: 'A night under the stars',
+  },
 };
 
 applyBrand('studio');
@@ -44,6 +62,11 @@ const el = {
   worldStatus: $('.world-status'),
   server: $('.studio-server'),
   wiggleToggle: $('.wiggle-toggle'),
+  surroundings: $('.surroundings'),
+  surroundingsView: $('.surroundings-view'),
+  surroundingsName: $('.surroundings-name'),
+  surroundingsEdge: $('.surroundings .edge'),
+  sceneMore: $('.scene-more'),
 };
 
 const state = {
@@ -83,6 +106,39 @@ function limitSounds() {
   for (const b of soundBoxes) b.disabled = full && !b.checked;
 }
 el.sounds.addEventListener('change', limitSounds);
+
+// The headset builds the world around the photo from these same fields
+// (src/world/environments.js), so the studio shows it as they change.
+function showSurroundings() {
+  const name = pickEnvironment({
+    place: state.place,
+    scale: el.scale.value,
+    light: el.light.value,
+    particles: el.particles.value,
+    soundLayers: soundBoxes.filter((b) => b.checked).map((b) => b.value),
+  });
+  const view = el.surroundingsView;
+  // own: the headset surrounds the photo with its own colours, so show the photo softened
+  view.style.filter = name ? '' : 'blur(10px) saturate(0.85)';
+  view.style.backgroundImage = `url(${name ? environmentUrl(name) : state.photoUrl})`;
+  view.style.backgroundSize = name ? '' : 'cover';
+  // the part straight ahead in the headset, centred in the strip (the
+  // panorama is drawn twice the strip's width)
+  const ahead = (((0.25 + (ENVIRONMENTS[name]?.yaw ?? 0)) % 1) + 1) % 1;
+  const w = view.clientWidth || 320;
+  view.style.backgroundPosition = `${Math.round(w * 0.5 - ahead * 2 * w)}px 50%`;
+  el.surroundingsName.textContent = name ? LABELS.surroundings[name] || '' : 'The photo\'s own colours';
+  el.surroundings.hidden = false;
+}
+for (const input of [el.scale, el.light, el.particles, el.sounds]) {
+  input.addEventListener('change', () => {
+    // once the person has set the scene, it is no longer a guess
+    state.place = null;
+    el.surroundingsEdge.textContent = 'The world around it';
+    showSurroundings();
+  });
+}
+addEventListener('resize', () => !el.surroundings.hidden && showSurroundings());
 
 // ---- server status ---------------------------------------------------------
 
@@ -124,21 +180,23 @@ function refuse(text) {
 
 async function loadFile(file) {
   setProgress('');
-  if (file.type && !file.type.startsWith('image/')) {
-    return refuse(`"${file.name}" is not a photo. Choose a JPEG, PNG or WebP photo.`);
+  const isVideo = file.type.startsWith('video/');
+  if (file.type && !file.type.startsWith('image/') && !isVideo) {
+    return refuse(`"${file.name}" is not a photo or a video. Choose a JPEG, PNG or WebP photo, or a short video.`);
   }
-  if (file.size > MAX_PHOTO_MB * 1e6) {
+  if (!isVideo && file.size > MAX_PHOTO_MB * 1e6) {
     return refuse(`"${file.name}" is ${Math.round(file.size / 1e6)} MB, more than the ${MAX_PHOTO_MB} MB the studio can open. Choose a smaller copy of it.`);
   }
   try {
-    const bitmap = await decodeImage(file);
+    const bitmap = isVideo ? await videoFrame(file) : await decodeImage(file);
     state.photo = resizeToCanvas(bitmap, 2048);
     state.thumb = resizeToCanvas(bitmap, 512);
-    state.focal35 = await readFocal35(file);
+    state.focal35 = isVideo ? null : await readFocal35(file);
   } catch (err) {
     return refuse(err.message);
   }
   state.photoUrl = jpegDataUrl(state.photo, 0.9);
+  state.place = null;
   state.anchors = [];
   state.taps = [];
   state.depth = null;
@@ -149,6 +207,8 @@ async function loadFile(file) {
   el.print.dataset.state = 'loaded';
   el.develop.disabled = false;
   el.develop.textContent = 'Develop';
+  el.develop.classList.remove('ghost');
+  el.surroundings.hidden = true;
   el.review.hidden = true;
   el.saveStep.hidden = true;
   el.saved.hidden = true;
@@ -218,6 +278,8 @@ async function develop() {
     state.developed = true;
     state.developedWords = words();
     el.develop.textContent = 'Develop again';
+    // the next step is hanging it; developing again is the quiet choice now
+    el.develop.classList.add('ghost');
     el.review.hidden = false;
     el.saveStep.hidden = false;
     el.wiggleToggle.hidden = false;
@@ -239,6 +301,7 @@ function applyAnalysis({ analysis: a, source, model, warning }) {
   state.model = model;
   state.lens = a.lens || 'main';
   state.titleSuggestion = a.titleSuggestion || '';
+  state.place = a.place || null;
   if (state.titleSuggestion && !el.title.value) el.title.placeholder = state.titleSuggestion;
   el.scale.value = a.scale;
   el.light.value = a.light;
@@ -247,8 +310,23 @@ function applyAnalysis({ analysis: a, source, model, warning }) {
   limitSounds();
   state.anchors = (a.anchors || []).slice(0, MAX_ANCHORS).map((x, i) => ({ ...x, id: `a${i + 1}`, note: '' }));
   el.warning.hidden = !warning;
-  el.warning.textContent = warning || '';
+  el.warning.textContent = visitorWarning(warning);
   renderAnchors();
+  // Without Claude the scene is a guess from the photo's brightness alone (a
+  // sunset coast comes back as a warm room), so the controls open under it.
+  const guessed = source !== 'claude';
+  el.surroundingsEdge.textContent = guessed ? 'A first guess' : 'The world around it';
+  el.sceneMore.open = guessed;
+  showSurroundings();
+}
+
+// A missing or refused key is the team's to fix, not the visitor's: they
+// read what to do, and the server's own words go to the console.
+function visitorWarning(warning) {
+  if (!warning) return '';
+  if (!/ANTHROPIC_API_KEY|API key/i.test(warning)) return warning;
+  console.warn(warning);
+  return 'Claude is not connected right now, so tap the photo to choose up to three spots yourself.';
 }
 
 function setProgress(text) {
@@ -380,7 +458,7 @@ el.addSpot.addEventListener('click', () => {
 
 function addSpot(x, y) {
   if (state.anchors.length >= MAX_ANCHORS) return;
-  state.anchors.push({ id: `a${state.anchors.length + 1}`, x, y, label: 'this', question: 'What do you remember here?', sound: 'none', note: '' });
+  state.anchors.push({ id: `a${state.anchors.length + 1}`, x, y, label: `spot ${state.anchors.length + 1}`, question: 'What do you remember here?', sound: 'none', note: '' });
   renderAnchors();
 }
 
@@ -464,6 +542,7 @@ function buildSpec() {
       light: el.light.value,
       particles: el.particles.value,
       soundLayers: soundBoxes.filter((b) => b.checked).map((b) => b.value),
+      place: state.place,
     },
     palette: state.palette,
     anchors: state.anchors,

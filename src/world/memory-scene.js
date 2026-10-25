@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import { fileUrl, loadDepth } from '../shared/memories.js';
 import { AnchorMarker } from './anchors.js';
 import { backgroundPlate, buildDepthMesh, plateSize } from './depth-mesh.js';
+import { ENVIRONMENTS, environmentUrl, pickEnvironment } from './environments.js';
 import { makeParticles } from './particles.js';
 import { memoryMaterial, peripheryMaterial } from './shaders.js';
 import { FONTS, disposeMesh, glowMap, makeText } from './text.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { WorldSplat, findPhotoView } from './world-splat.js';
 
 const BLOOM_S = 2.2;
 const BLOOM_RADIUS = 0.45;
@@ -59,14 +59,24 @@ export class MemoryScene {
     this.dispose();
     this.item = item;
     const { spec } = item;
-    const [photo, depth] = await Promise.all([
+    const [photo, depth, surroundings] = await Promise.all([
       loader.loadAsync(fileUrl(item, 'photo')),
       loadDepth(fileUrl(item, 'depth')),
+      loadSurroundings(item),
     ]);
+    const { map: envMap, yaw: envYaw } = surroundings;
     photo.colorSpace = THREE.SRGBColorSpace;
     photo.anisotropy = this.maxAnisotropy;
     photo.generateMipmaps = true;
     photo.minFilter = THREE.LinearMipmapLinearFilter;
+    if (envMap) {
+      envMap.colorSpace = THREE.SRGBColorSpace;
+      // mips let the shader blur the surroundings near the photo; repeat
+      // closes the seam where the panorama's two ends meet behind the viewer
+      envMap.generateMipmaps = true;
+      envMap.minFilter = THREE.LinearMipmapLinearFilter;
+      envMap.wrapS = THREE.RepeatWrapping;
+    }
 
     this.built = buildDepthMesh(spec, depth);
     const { geometry, tanH, tanV, aspect } = this.built;
@@ -76,11 +86,7 @@ export class MemoryScene {
     this.mesh.frustumCulled = false;
     this.group.add(this.mesh);
 
-    // average every palette colour so the haze behind the photo feels warm,
-    // not nearly black (the old last-colour pick was #1b1009 for the-cat)
-    const base = new THREE.Color(0, 0, 0);
-    for (const hex of spec.palette) base.add(new THREE.Color(hex));
-    base.multiplyScalar(0.4 / Math.max(1, spec.palette.length));
+    const env = envColors(spec);
     const maxDim = Math.max(spec.photo.width, spec.photo.height);
     let plate = null;
     if (GAP_FILL) {
@@ -95,7 +101,7 @@ export class MemoryScene {
         plate.needsUpdate = true;
       };
     }
-    const shared = { tanH, tanV, base, maxDim, aspect, bloom: this.material.uniforms.uBloom, plate, env: placeColours(spec) };
+    const shared = { tanH, tanV, env, maxDim, aspect, bloom: this.material.uniforms.uBloom, plate, envMap, envYaw };
     this.periphery = new THREE.Mesh(new THREE.SphereGeometry(60, 48, 24), peripheryMaterial(photo, shared));
     this.periphery.renderOrder = -1;
     this.group.add(this.periphery);
@@ -104,8 +110,12 @@ export class MemoryScene {
     // holds the photo's view and everything around it. If it fails to load,
     // the sheet and haze stay, so there is never nothing to see.
     if (spec.world && this.stage) {
-      const splat = new WorldSplat();
+      let splat = null;
       try {
+        // the splat renderer is a large download, so only a memory with a
+        // generated world fetches it; the darkroom loads without it
+        const { WorldSplat, findPhotoView } = await import('./world-splat.js');
+        splat = new WorldSplat();
         const view = spec.world.pano ? await findPhotoView(spec.world, photo.image, tanH, tanV) : { yaw: 0, pitch: 0 };
         const mesh = await splat.load(spec.world, { stage: this.stage, xr: this.stage.renderer.xr.isPresenting, view });
         // the photo looks this far up (+) or down (-) inside its world
@@ -120,7 +130,7 @@ export class MemoryScene {
         } else splat.dispose();
       } catch (err) {
         console.warn('the world did not load; showing the photo instead:', err.message);
-        splat.dispose();
+        splat?.dispose();
       }
     }
 
@@ -140,10 +150,7 @@ export class MemoryScene {
       this.group.add(marker.group);
     }
 
-    this.intro = makeText('Look at a light to bring it back', { font: FONTS.hand(64, 500), lineHeightM: 0.05, maxChars: 34 });
-    this.intro.position.set(0, -0.42, -1.4);
-    this.intro.material.opacity = 0;
-    this.group.add(this.intro);
+    this.intro = null;
 
     this.vivid = 0;
     this.vividTarget = 0;
@@ -318,11 +325,6 @@ export class MemoryScene {
       pm.uScale.value = pointScale;
       pm.uOpacity.value = this.fadeIn * (0.25 + 0.75 * vividAll);
     }
-    if (this.intro) {
-      const shown = t - (this.enteredAt ?? t);
-      this.intro.material.opacity = this.fadeIn * Math.max(0, Math.min(1, shown - 0.8) - Math.max(0, (shown - 6) / 1.5));
-      this.intro.lookAt(headPos);
-    }
     if (this.titleCard) {
       const k = t - this.revivedAt;
       const o = Math.min(1, Math.max(0, (k - TITLE_AFTER_S) / 1.2)) * (k > 9 ? Math.max(0.35, 1 - (k - 9) / 2) : 1);
@@ -375,24 +377,68 @@ export class MemoryScene {
   }
 }
 
-// The place around a memory with no generated world: a floor from the
-// photo's darkest colour, a ceiling from its lightest (indoors), or a sky
-// (outdoors, by its light), so up, down and behind are never empty.
-const NIGHT_SKY = new THREE.Color('#1d2433');
-const DAY_SKY = new THREE.Color('#b8c8d8');
-function placeColours(spec) {
-  const cols = (spec.palette.length ? spec.palette : ['#6b5a48', '#d9c4a8']).map((h) => new THREE.Color(h));
-  const lum = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
-  cols.sort((a, b) => lum(a) - lum(b));
-  const darkest = cols[0];
-  const lightest = cols.at(-1);
-  const outdoor = spec.scene.scale === 'street' || spec.scene.scale === 'landscape';
-  const night = spec.scene.light === 'night';
+// Scene-aware environment colours for the periphery sphere: top (ceiling/sky),
+// mid (walls/horizon), bot (floor/ground), and whether to draw stars.
+// Hand-tuned environments for the sample memories, picked from the actual
+// photos. The shader multiplies these for floor/wall/ceiling detail.
+const ENV_OVERRIDES = {
+  'morning-coffee': {
+    // dark oak café table, warm brown walls, amber overhead lamp
+    top: [0xD4, 0xA8, 0x6B, 0.50],
+    mid: [0x8B, 0x68, 0x40, 0.40],
+    bot: [0x5C, 0x3A, 0x22, 0.35],
+    night: 0,
+  },
+  'the-cat': {
+    // coastal cliff at golden hour, warm sunset sky, rocky ground
+    top: [0xE8, 0xB8, 0x8A, 0.50],
+    mid: [0xD4, 0x95, 0x6B, 0.40],
+    bot: [0x5C, 0x6B, 0x4A, 0.25],
+    night: 0,
+  },
+  'launch-night': {
+    // clear starry night, milky way, dark rocky terrain
+    top: [0x12, 0x18, 0x30, 0.35],
+    mid: [0x20, 0x1C, 0x28, 0.15],
+    bot: [0x18, 0x14, 0x10, 0.10],
+    night: 1,
+  },
+};
+
+function envColors(spec) {
+  const c = (hex, s) => new THREE.Color(hex).multiplyScalar(s);
+  const fromArr = ([r, g, b, s]) => new THREE.Color(r / 255, g / 255, b / 255).multiplyScalar(s);
+  const ov = ENV_OVERRIDES[spec.id];
+  if (ov) return { top: fromArr(ov.top), mid: fromArr(ov.mid), bot: fromArr(ov.bot), night: ov.night };
+  // fallback for unknown memories: derive from palette and light
+  const { light } = spec.scene;
+  const palette = spec.palette;
+  if (light === 'night') {
+    return {
+      top: c(palette[1] || '#1b2335', 0.35),
+      mid: c(palette[4] || '#b89b6e', 0.2),
+      bot: c(palette[0] || '#2b364f', 0.1),
+      night: 1,
+    };
+  }
   return {
-    floor: darkest.clone().multiplyScalar(0.8),
-    sky: outdoor ? (night ? NIGHT_SKY.clone() : lightest.clone().lerp(DAY_SKY, 0.5)) : lightest.clone().multiplyScalar(0.9),
-    outdoor,
+    top: c(palette[1] || '#c77f4b', 0.45),
+    mid: c(palette[0] || '#916a4c', 0.3),
+    bot: c(palette[4] || palette[2] || '#4d2f1a', 0.18),
+    night: 0,
   };
+}
+
+// A sample can bring its own env.jpg; any other memory gets a panorama from
+// the library, picked from its scene. No panorama at all (a failed load)
+// leaves the palette's sky and ground in the shader.
+async function loadSurroundings(item) {
+  const own = item.base?.startsWith('/memories/') ? await loader.loadAsync(item.base + 'env.jpg').catch(() => null) : null;
+  if (own) return { map: own, yaw: 0 };
+  const name = pickEnvironment(item.spec.scene);
+  if (!name) return { map: null, yaw: 0 };
+  const map = await loader.loadAsync(environmentUrl(name)).catch(() => null);
+  return { map, yaw: ENVIRONMENTS[name]?.yaw ?? 0 };
 }
 
 function easeOut(x) {

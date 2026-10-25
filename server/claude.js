@@ -4,6 +4,7 @@ import {
   MAX_ANCHORS,
   MAX_SOUND_LAYERS,
   PARTICLES,
+  PLACES,
   SCALES,
   SOUND_LAYERS,
 } from '../src/shared/contract.js';
@@ -11,9 +12,11 @@ import {
 // Reads one photo with Claude and returns scene settings plus up to three
 // anchors. The key only ever comes from the environment.
 const API_URL = 'https://api.anthropic.com/v1/messages';
-export const MODEL = process.env.UNFADE_MODEL || 'claude-sonnet-5-5';
+// Opus places the spots more exactly and keeps to the question rules better;
+// a few seconds slower than Sonnet, which the studio's progress covers.
+export const MODEL = process.env.UNFADE_MODEL || 'claude-opus-5-5';
 const EFFORT = process.env.UNFADE_EFFORT || 'low';
-const TIMEOUT_MS = 30000;
+const TIMEOUT_MS = 45000;
 
 const SYSTEM = `You help a person step back into one of their own photos inside a VR headset. They will stand inside a 3D version of this photo. It starts faded, and each anchor you choose is a spot that brings part of the memory back when they look at it.
 
@@ -31,7 +34,8 @@ What you write must stay true to the photo:
 - Each question is about the thing its spot sits on, and asks what only someone who knew this moment could answer: who, a name, what was said or happening, where something came from, what came before or after. Ask, never tell. At most 9 words, plain words, no exclamation marks. Speak of the people in the photo as he, she or they, never as "you", and only of people who are really in it (with nobody in the photo, ask about the things and the place: "Who set up this picnic blanket?", never "What did they eat?"): no "you two", "you all" or "were you laughing", and never assume something is the person's or that they did it. Never ask what an animal sensed or thought, and never ask anyone to imagine or guess ("might", "do you think"). Good: "Who lit these candles?", "What was she laughing at?", "What was this dog's name?", "Whose chair was this?" Bad: "What were you two talking about?", "When did you last light these?", "What scents was it picking up?", "What do you think the wall felt like?", "Your grandmother baked this cake."
 - Keep every question warm and curious about the good parts of the moment: the people, what they were doing, what they could hear, smell or taste, a small detail. Never ask about loss, death, illness, absence or regret, and never suggest that anyone or anything is gone, even when the photo looks old or a place looks empty.
 - Never assume the person is in the photo, took it, or who they were with, and never assume what a stranger in it was doing with them. Ask openly instead: "Who else was there?", not "Who did you sit here with?". When a photo looks older than the person could be, they were not there: ask about the people in it and that moment ("What was happening just before this?", "Where was this coat from?"), never "you" in the scene, and never what the person remembers of them.
-- sound for an anchor: a layer from the list that this thing makes or sits in, or none.`;
+- sound for an anchor: a layer from the list that this thing makes or sits in, or none.
+- place: what stands around the photo in the headset. Pick a stock place only when it is clearly the same kind of place as the photo (indoors or out, time of day, season, weather): fireplace (a warm room with a lit fireplace, evening), warm_restaurant_night (a warmly lit restaurant at night), wooden_lounge (a modern wooden lounge with sofas), lebombo (a plain bright living room with a big window, daytime), ballroom (an ornate old hall with a chandelier), urban_street_01 (a leafy street with parked cars, daytime), vignaioli_night (an old town square at night), meadow_2 (a green meadow with trees, sunny), misty_pines (a misty pine forest), spiaggia_di_mondello (a sandy beach, sunny), the_sky_is_on_fire (a seaside walk at sunset), spruit_sunrise (open fields at sunrise), alps_field (a grassy field below mountains), snowy_park_01 (a snowy park), satara_night_no_lamps (open country at night under stars). Otherwise choose own (a kitchen, a classroom, a car, a shop, a stadium, a mosque, an office, a close-up with little background): a wrong place looks fake, and own surrounds the photo with its own colours.`;
 
 const SCHEMA = {
   type: 'object',
@@ -42,6 +46,7 @@ const SCHEMA = {
     particles: { type: 'string', enum: PARTICLES },
     soundLayers: { type: 'array', items: { type: 'string', enum: SOUND_LAYERS } },
     lens: { type: 'string', enum: LENSES },
+    place: { type: 'string', enum: PLACES },
     anchors: {
       type: 'array',
       items: {
@@ -58,7 +63,7 @@ const SCHEMA = {
       },
     },
   },
-  required: ['titleSuggestion', 'scale', 'light', 'particles', 'soundLayers', 'lens', 'anchors'],
+  required: ['titleSuggestion', 'scale', 'light', 'particles', 'soundLayers', 'lens', 'place', 'anchors'],
   additionalProperties: false,
 };
 
@@ -85,6 +90,8 @@ export function fallbackAnalysis(stats = {}) {
     light,
     particles: light === 'night' ? 'none' : 'dust',
     soundLayers: ['room_tone'],
+    // a guess from brightness alone would put the photo in a wrong place
+    place: 'own',
     lens: 'main',
     anchors: [],
   };
@@ -106,6 +113,7 @@ function cleanAnalysis(raw, width, height) {
     particles: raw.particles,
     soundLayers: (raw.soundLayers || []).slice(0, MAX_SOUND_LAYERS),
     lens: raw.lens,
+    place: PLACES.includes(raw.place) ? raw.place : 'own',
     anchors,
   };
 }
@@ -143,7 +151,7 @@ export async function analyzeWithClaude({ base64, mediaType, width, height, hint
     body: JSON.stringify({
       model: MODEL,
       // thinking counts toward this cap, so leave room past the short reply
-      max_tokens: 4000,
+      max_tokens: 8000,
       system: SYSTEM,
       output_config: { effort: EFFORT, format: { type: 'json_schema', schema: SCHEMA } },
       messages: [

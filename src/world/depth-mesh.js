@@ -16,7 +16,7 @@ const PLATE_STEP = 0.1;
 // shortcut: off for street and landscape, where it cut thin far things (the
 // launch towers) away whole; revisit if a street photo shows streaked edges.
 const WINDOW_CELLS = 1;
-const WINDOW_CUT = { closeup: 0.3, room: 0.3, street: Infinity, landscape: Infinity };
+const WINDOW_CUT = { closeup: 0.5, room: 0.4, street: Infinity, landscape: Infinity };
 
 // Turns a photo plus its depth map into a grid of triangles, as if every
 // pixel were pushed out along the ray the camera saw it on. Standing at the

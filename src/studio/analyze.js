@@ -11,7 +11,9 @@ export async function analyzePhoto(canvas, { hints = {}, stats = {} } = {}) {
     const res = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      signal: AbortSignal.timeout(45000),
+      // longer than the server's own 45 s limit on Claude (server/claude.js),
+      // so a slow answer ends in the server's fallback, not a dropped request
+      signal: AbortSignal.timeout(60000),
       body: JSON.stringify({ image: jpegDataUrl(small, 0.85), width: small.width, height: small.height, hints, stats }),
     });
     if (!res.ok) throw new Error(`server said ${res.status}`);

@@ -77,6 +77,34 @@
   color-scheme: dark;
 }
 
+/* The start page, the studio and the guide are read in daylight, so they sit
+   on the paper; the headset's darkroom keeps the dark tokens above. */
+:root.light {
+  --ink-0: #f4ede3;
+  --ink-1: #ebe2d5;
+  --ink-2: #e0d5c5;
+  --line: #cbbca7;
+  --paper: #211812;
+  --paper-2: #4a3c31;
+  --paper-3: #6d5e51;
+  --ember: #a8571c;
+  color-scheme: light;
+}
+
+/* Things from the darkroom (the film strip, a print, the open memory) keep its colours. */
+:root.light .strip,
+:root.light .print,
+:root.light .now-photo {
+  --ink-0: #0c0907;
+  --ink-1: #15100d;
+  --ink-2: #211915;
+  --line: #3a2d26;
+  --paper: #f1e9dc;
+  --paper-2: #d9cfc0;
+  --paper-3: #9c8f80;
+  --ember: #f0a35e;
+}
+
 *,
 *::before,
 *::after {

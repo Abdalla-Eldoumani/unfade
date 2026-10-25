@@ -18,20 +18,20 @@ export class Hub {
 
     const room = new THREE.Mesh(
       new THREE.CylinderGeometry(3.4, 3.4, 3.2, 48, 1, true),
-      new THREE.MeshStandardMaterial({ color: '#1a1310', roughness: 1, side: THREE.BackSide }),
+      new THREE.MeshStandardMaterial({ color: '#2b2019', roughness: 1, side: THREE.BackSide }),
     );
     room.position.y = 1.6;
     this.group.add(room);
 
     const floor = new THREE.Mesh(
       new THREE.CircleGeometry(3.4, 48),
-      new THREE.MeshStandardMaterial({ color: '#120d0a', roughness: 1 }),
+      new THREE.MeshStandardMaterial({ color: '#21180f', roughness: 1 }),
     );
     floor.rotation.x = -Math.PI / 2;
     this.group.add(floor);
 
     // lit by the safelight too, so the wall does not end in a hard black rim
-    const ceiling = new THREE.Mesh(new THREE.CircleGeometry(3.4, 48), new THREE.MeshStandardMaterial({ color: '#140e0b', roughness: 1 }));
+    const ceiling = new THREE.Mesh(new THREE.CircleGeometry(3.4, 48), new THREE.MeshStandardMaterial({ color: '#231a14', roughness: 1 }));
     ceiling.rotation.x = Math.PI / 2;
     ceiling.position.y = 3.2;
     this.group.add(ceiling);
@@ -65,13 +65,19 @@ export class Hub {
     this.safelight = new THREE.PointLight('#ff4a2a', 9, 9, 1.6);
     this.safelight.position.set(0, 2.2, -2.9);
     this.group.add(this.safelight);
-    this.group.add(new THREE.HemisphereLight('#3a1f17', '#050302', 0.9));
-    const front = new THREE.PointLight('#ffd9b0', 0.6, 3, 2);
-    front.position.set(0, 1.9, 0.2);
+    this.group.add(new THREE.HemisphereLight('#5a3a2a', '#120a06', 1.5));
+    // a warm lamp over the line, so the prints are the warmest, brightest
+    // thing in the room and the red stays at the far wall
+    const front = new THREE.PointLight('#ffcf9e', 2.4, 4.5, 2);
+    front.position.set(0, 2.05, -0.15);
     this.group.add(front);
 
     this.line = new THREE.Group();
     this.group.add(this.line);
+    // a soft amber halo behind the prints, so they read against the dark
+    this.lineGlow = makeGlow('#ffb070', 3.4, 0.14);
+    this.lineGlow.position.z = -0.3;
+    this.line.add(this.lineGlow);
     this.lineMesh = new THREE.Mesh(
       new THREE.CylinderGeometry(0.0025, 0.0025, 1, 6),
       new THREE.MeshStandardMaterial({ color: '#8a7a6a', roughness: 0.7 }),
