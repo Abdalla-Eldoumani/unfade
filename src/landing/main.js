@@ -71,8 +71,8 @@ async function start() {
   if (!h) {
     line.textContent = 'Server not running: this device works on its own, with the three sample memories';
   } else {
-    const claude = h.claude ? `Claude on (${h.model}, ${h.analysesLeft} left)` : 'Claude off, questions come from the fallback';
-    line.textContent = `Server live · ${claude}`;
+    // visitors read this page; whether Claude is on shows in the studio's header
+    line.textContent = 'Server live';
   }
 
   const showUrls = () => {
@@ -109,8 +109,7 @@ async function start() {
     if (!isUp) {
       line.textContent = 'Server not reachable';
     } else {
-      const claude = now.claude ? `Claude on (${now.model}, ${now.analysesLeft} left)` : 'Claude off, questions come from the fallback';
-      line.textContent = `Server back · ${claude}`;
+      line.textContent = 'Server back';
     }
   }, 10000);
 }
