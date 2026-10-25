@@ -85,7 +85,7 @@ export ANTHROPIC_API_KEY="your key"     # this terminal only
 npm start
 ```
 
-Set it with `export` in the one Git Bash window that runs the server, and never start Claude Code from that window. Without a key the studio still works: you place the spots yourself and each one asks "What do you remember here?". The server caps analyses at 150 per run and 6 per minute (`UNFADE_MAX_ANALYSES` changes the first), and remembers answers for photos it has already seen. `UNFADE_MODEL` picks the model, `claude-opus-5-5` by default; `claude-sonnet-5-5` answers faster for half the price.
+Put it in a `.env` file at the repo root (`ANTHROPIC_API_KEY=...`; git ignores the file), or set it with `export` in the window that runs the server; an exported key wins over the file. Without a key the studio still works: you place the spots yourself and each one asks "What do you remember here?". The server caps analyses at 150 per run and 6 per minute (`UNFADE_MAX_ANALYSES` changes the first), and remembers answers for photos it has already seen. `UNFADE_MODEL` picks the model, `claude-opus-5-5` by default; `claude-sonnet-5-5` answers faster for half the price.
 
 Every memory stands in a place: its own `env.jpg` if it has one, otherwise one of fifteen 360 panoramas picked from the light, the sounds and the scale the studio settled on. With `WORLDLABS_API_KEY` exported in the same window, the studio also offers to build a 3D world around the photo with World Labs Marble (about five minutes and $1.26 a world, at most 8 a run), and `node server/worldlabs.js --samples` builds the samples' worlds. Worlds are kept in `data/`, so they stay on the laptop that built them.
 
@@ -124,7 +124,7 @@ docs/CONTRACT.md describes the memory file, the room messages and the HTTP API. 
 
 ## How we worked
 
-We built Unfade with Claude Code, each of us in our own part. `.agent/` holds the team setup, the merge checklist, the demo plan and the prompt each part started from. `CLAUDE.md` is the project's rules for Claude Code, and `.claude/settings.json` holds the shared hooks that stop batch commits, force pushes, destructive git commands and dev servers started in the foreground.
+We built Unfade with help from an AI coding assistant, each of us in our own part. `.agent/` holds the team setup, the merge checklist, the demo plan and the prompt each part started from. `CLAUDE.md` is the project's rules for the assistant, and `.claude/settings.json` holds the shared hooks that stop batch commits, force pushes, destructive git commands and dev servers started in the foreground.
 
 ## Credits
 
