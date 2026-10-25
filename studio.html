@@ -24,8 +24,8 @@
             <div class="anchors"></div>
             <label class="print-drop">
               <input type="file" accept="image/*" class="file-input" />
-              <span class="edge">Drop a photo here</span>
-              <span class="print-drop-big">or choose one</span>
+              <span class="edge drop-pointer">Drop a photo here</span>
+              <span class="print-drop-big"><span class="drop-pointer">or choose one</span><span class="drop-touch">choose a photo</span></span>
             </label>
           </div>
           <input class="print-title" maxlength="60" placeholder="Title it in your own words" aria-label="Title" />
@@ -57,6 +57,12 @@
             <p class="hint">Drag a spot to move it, or select it and use the arrow keys. Tap the photo to add one (three at most). Change any question, and add what you remember if you like.</p>
             <ol class="anchor-list"></ol>
             <button class="ghost add-spot">Add a spot</button>
+            <figure class="surroundings" hidden>
+              <div class="surroundings-view" role="img" aria-label="The world around the photo"></div>
+              <figcaption><span class="edge">The world around it</span><span class="surroundings-name"></span></figcaption>
+            </figure>
+            <details class="scene-more">
+              <summary>Change the light, the air and the sounds</summary>
             <div class="scene">
               <label>Distance <select name="scale"></select></label>
               <label>Light <select name="light"></select></label>
@@ -66,6 +72,7 @@
                 <div class="sound-list"></div>
               </fieldset>
             </div>
+            </details>
           </li>
           <li class="step" data-step="save" hidden>
             <p class="edge">04 · Hang it in the darkroom</p>
