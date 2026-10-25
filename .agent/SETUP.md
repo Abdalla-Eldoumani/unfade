@@ -65,4 +65,4 @@ What to expect:
 
 ## Keys
 
-Only the laptop that runs the server for Claude needs `ANTHROPIC_API_KEY`, set in that terminal (`export ANTHROPIC_API_KEY="..."`) or once with `setx` on Windows. Never in a file, never in a chat with Claude Code.
+Only the laptop that runs the server for Claude needs `ANTHROPIC_API_KEY`: set it with export (`export ANTHROPIC_API_KEY="..."`) in the one Git Bash window that runs the server, and never start Claude Code from that window. Never in a file, never in a chat with Claude Code.
