@@ -333,9 +333,12 @@ textarea {
   color: var(--paper);
 }
 
-.develop:hover {
-  background: var(--safelight-glow);
-  border-color: var(--safelight-glow);
+/* a tap on a phone leaves :hover on, so only a real pointer gets it */
+@media (hover: hover) {
+  .develop:hover {
+    background: var(--safelight-glow);
+    border-color: var(--safelight-glow);
+  }
 }
 
 .progress {
