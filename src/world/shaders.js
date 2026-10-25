@@ -207,31 +207,36 @@ export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, blo
         float inside = 0.0;
         float local = uVivid;
         #if HAZE_DETAIL > 0
-        if (d.z < -0.02) {
-          vec2 p = d.xy / -d.z;
-          vec2 uv = 0.5 + p / (2.0 * uTan);
-          vec2 outside = max(abs(uv - 0.5) - 0.5, 0.0) * 2.0 * uTan;
-          inside = 1.0 - clamp(length(outside) * 3.0, 0.0, 1.0);
-          float w = exp(-length(outside) * 1.4) * smoothstep(-0.02, -0.4, d.z);
-          // behind the photo, the same blur the faded photo has; further out, all the way
-          float lean = smoothstep(0.03, 0.2, vLean);
-          float lod = mix(uLod + 1.0, mix(2.5, uLod, GAP_BLUR * lean), inside);
-          vec3 c = textureLod(uPhoto, clamp(uv, 0.0, 1.0), lod).rgb;
-          #if GAP_FILL
-          vec3 behind = textureLod(uPlate, clamp(uv, 0.0, 1.0), max(0.0, lod - uPlateShift)).rgb;
-          c = mix(c, behind, inside * lean);
-          #endif
-          col = mix(uBase, c * mix(0.75, 1.0, inside), w);
-          #if HAZE_DETAIL > 1
-          local = mix(uVivid, bloomAt(clamp(uv, 0.0, 1.0), uCore), inside);
-          #else
-          local = mix(uVivid, uCore, inside);
-          #endif
-        }
+        // Project the photo onto the full sphere: forward rays use the real
+        // projection, side and rear rays clamp to the nearest edge at max blur,
+        // wrapping the photo's colours all the way around as a soft glow.
+        vec2 p = d.xy / max(0.05, -d.z);
+        vec2 uv = 0.5 + p / (2.0 * uTan);
+        vec2 outside = max(abs(uv - 0.5) - 0.5, 0.0) * 2.0 * uTan;
+        inside = 1.0 - clamp(length(outside) * 3.0, 0.0, 1.0);
+        // forward: 1 when looking at photo, 0 when looking behind
+        float forward = smoothstep(0.0, -0.2, d.z);
+        // even behind, keep 40 % of the blurred edge colour so the sphere
+        // never drops to flat near-black
+        float w = exp(-length(outside) * 0.8) * max(forward, 0.4);
+        float lean = smoothstep(0.03, 0.2, vLean);
+        // push to heavier blur for non-forward directions
+        float lod = mix(uLod + 2.0, mix(2.5, uLod, GAP_BLUR * lean), inside * forward);
+        vec3 c = textureLod(uPhoto, clamp(uv, 0.0, 1.0), lod).rgb;
+        #if GAP_FILL
+        vec3 behind = textureLod(uPlate, clamp(uv, 0.0, 1.0), max(0.0, lod - uPlateShift)).rgb;
+        c = mix(c, behind, inside * lean * forward);
         #endif
-        col *= mix(mix(0.5, 1.0, smoothstep(-0.7, 0.25, d.y)), 1.0, inside);
+        col = mix(uBase, c * mix(0.65, 1.0, inside), w);
+        #if HAZE_DETAIL > 1
+        local = mix(uVivid, bloomAt(clamp(uv, 0.0, 1.0), uCore), inside * forward);
+        #else
+        local = mix(uVivid, uCore, inside * forward);
+        #endif
+        #endif
+        col *= mix(mix(0.55, 1.0, smoothstep(-0.7, 0.3, d.y)), 1.0, inside);
         col = mix(fadedLook(col, uPaper * mix(0.4, 1.0, inside), uCast), col, local);
-        col += (ign(gl_FragCoord.xy) - 0.5) * 0.012;
+        col += (ign(gl_FragCoord.xy) - 0.5) * 0.012 * max(0.15, dot(col, vec3(0.3, 0.6, 0.1)));
         gl_FragColor = vec4(max(col, 0.0) * uFadeIn, 1.0);
         #include <colorspace_fragment>
       }
