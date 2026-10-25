@@ -83,7 +83,7 @@ function sendFile(res, file, { immutable = false } = {}) {
   fs.stat(file, (err, st) => {
     if (err || !st.isFile()) return json(res, 404, { error: 'not found' });
     const type = TYPES[path.extname(file).toLowerCase()] || 'application/octet-stream';
-    const cache = immutable ? 'public, max-age=31536000, immutable' : 'no-cache';
+    const cache = immutable ? 'public, max-age=31536000, immutable' : 'no-store';
     res.writeHead(200, { ...BASE_HEADERS, 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': cache });
     fs.createReadStream(file).pipe(res);
   });
