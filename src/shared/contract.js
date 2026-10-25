@@ -10,6 +10,9 @@ export const LIGHTS = ['warm_indoor', 'cool_indoor', 'daylight', 'golden_hour', 
 export const PARTICLES = ['dust', 'snow', 'rain', 'fireflies', 'confetti', 'petals', 'mist', 'none'];
 export const SOUND_LAYERS = ['room_tone', 'wind', 'rain', 'waves', 'stream', 'fire', 'birds', 'crickets', 'city', 'night_air'];
 export const LENSES = ['main', 'ultrawide', 'selfie', 'telephoto'];
+// Stock surroundings in public/environments a memory can stand in; own means
+// the photo's own colours around it instead of a stock place.
+export const PLACES = ['fireplace', 'warm_restaurant_night', 'wooden_lounge', 'lebombo', 'ballroom', 'urban_street_01', 'vignaioli_night', 'meadow_2', 'misty_pines', 'spiaggia_di_mondello', 'the_sky_is_on_fire', 'spruit_sunrise', 'alps_field', 'snowy_park_01', 'satara_night_no_lamps', 'own'];
 export const MAX_ANCHORS = 3;
 export const MAX_SOUND_LAYERS = 3;
 export const DEPTH_ENCODING = 'rg16-disparity';
@@ -108,6 +111,7 @@ export function normalizeMemory(input) {
       light: pick(scene.light, LIGHTS, 'warm_indoor'),
       particles: pick(scene.particles, PARTICLES, 'dust'),
       soundLayers: [...new Set(layers.filter((l) => SOUND_LAYERS.includes(l)))].slice(0, MAX_SOUND_LAYERS),
+      ...(PLACES.includes(scene.place) ? { place: scene.place } : {}),
     },
     palette: (Array.isArray(m.palette) ? m.palette : []).filter((c) => HEX_RE.test(c)).slice(0, 6),
     anchors: anchors.slice(0, MAX_ANCHORS).map((a, i) => {
