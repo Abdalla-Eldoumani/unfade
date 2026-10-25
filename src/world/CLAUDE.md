@@ -2,6 +2,7 @@
 
 ## Gotchas
 - `date` in Git Bash prints laptop local time (Mountain); `TZ=America/Edmonton date` does not work there and prints UTC.
+- Surroundings: a memory without its own env.jpg gets a panorama from public/environments, picked in environments.js from scale, light, particles and sounds (the fields the studio lets the person change). GLSL ES 3.0 reserves words like `cast`, `class` and `input`: a variable with one of those names fails the whole shader, and the readout shows "Shader Error 0 - VALIDATE_STATUS false".
 - `npm run xr-check` with both servers up takes about a minute for all three samples (30 steps). The screenshots are the only view of the run.
 - xr-check parks the right controller at (0, 1.55, -0.12) to step in, then lowers it to the hip pointing at the floor, so its dot no longer covers the inside and revived shots.
 - Editing any file under src/ while xr-check or another browser check runs makes Vite reload the page mid-run: the check fails with `window.unfade` undefined. Edit between runs.
