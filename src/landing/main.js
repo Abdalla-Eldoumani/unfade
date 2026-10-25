@@ -83,14 +83,14 @@ async function start() {
       return;
     }
     // keep the scheme: typed without it, a browser may try http://, which the TLS port refuses
-    el.replaceChildren(...urls.map((u) => Object.assign(document.createElement('span'), { textContent: u })));
+    el.replaceChildren(...urls.map(addressLine));
     const bases = lanBase(h?.lan);
     const mirrorEl = $('.mirror-url');
     const guideEl = $('.guide-url');
     if (bases.length) {
       const roomQ = sanitizeRoom(roomInput.value) !== 'demo' ? `?room=${sanitizeRoom(roomInput.value)}&mirror` : '?mirror';
-      mirrorEl.textContent = `${bases[0]}/world.html${roomQ}`;
-      guideEl.textContent = `${bases[0]}${roomTail('/guide.html')}`;
+      mirrorEl.replaceChildren(addressLine(`${bases[0]}/world.html${roomQ}`));
+      guideEl.replaceChildren(addressLine(`${bases[0]}${roomTail('/guide.html')}`));
     }
     if (location.protocol !== 'https:') {
       $('.how-small').textContent = 'This page is on plain HTTP, and the headset needs HTTPS. Run npm run cert, then start again.';
@@ -113,6 +113,16 @@ async function start() {
       line.textContent = `Server back · ${claude}`;
     }
   }, 10000);
+}
+
+// An address that wraps only after the scheme and before the path, so a
+// person copying it onto a headset never meets a line break inside the IP.
+function addressLine(url) {
+  const span = document.createElement('span');
+  const m = /^(https?:\/\/)([^/]+)(.*)$/.exec(url);
+  if (m) span.append(m[1], document.createElement('wbr'), m[2], document.createElement('wbr'), m[3]);
+  else span.textContent = url;
+  return span;
 }
 
 function readRoom() {
