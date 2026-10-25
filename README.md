@@ -127,6 +127,7 @@ We built Unfade with Claude Code, each of us in our own part. `.agent/` holds th
 ## Credits
 
 - Sample photos: "Coffee cup" by Rachel Michetti (CC0), "Chelsea the cat" by Stéfan van der Walt (CC0), both from the scikit-image sample data; the Falcon 9 and DSCOVR launch photo by SpaceX, released into the public domain.
+- The 360 panoramas around the memories come from Poly Haven (CC0); public/environments/CREDITS.md lists each one and its authors.
 - Depth Anything V2 Small (Apache-2.0), in the ONNX export by onnx-community on Hugging Face.
 - three.js, onnxruntime-web, ws and Vite (MIT).
 - Young Serif, Caveat and IBM Plex Mono under the SIL Open Font License 1.1 (licence texts in public/fonts/).
