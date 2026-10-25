@@ -65,6 +65,8 @@ const el = {
   surroundings: $('.surroundings'),
   surroundingsView: $('.surroundings-view'),
   surroundingsName: $('.surroundings-name'),
+  surroundingsEdge: $('.surroundings .edge'),
+  sceneMore: $('.scene-more'),
 };
 
 const state = {
@@ -124,7 +126,13 @@ function showSurroundings() {
   el.surroundingsName.textContent = LABELS.surroundings[name] || '';
   el.surroundings.hidden = false;
 }
-for (const input of [el.scale, el.light, el.particles, el.sounds]) input.addEventListener('change', showSurroundings);
+for (const input of [el.scale, el.light, el.particles, el.sounds]) {
+  input.addEventListener('change', () => {
+    // once the person has set the scene, it is no longer a guess
+    el.surroundingsEdge.textContent = 'The world around it';
+    showSurroundings();
+  });
+}
 addEventListener('resize', () => !el.surroundings.hidden && showSurroundings());
 
 // ---- server status ---------------------------------------------------------
@@ -296,6 +304,11 @@ function applyAnalysis({ analysis: a, source, model, warning }) {
   el.warning.hidden = !warning;
   el.warning.textContent = visitorWarning(warning);
   renderAnchors();
+  // Without Claude the scene is a guess from the photo's brightness alone (a
+  // sunset coast comes back as a warm room), so the controls open under it.
+  const guessed = source !== 'claude';
+  el.surroundingsEdge.textContent = guessed ? 'A first guess' : 'The world around it';
+  el.sceneMore.open = guessed;
   showSurroundings();
 }
 
