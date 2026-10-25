@@ -197,6 +197,14 @@ body {
   resize: vertical;
 }
 
+/* iOS zooms the page into any field under 16 px when it takes focus */
+@media (pointer: coarse) {
+  .note-form input,
+  .note-form select {
+    font-size: 16px;
+  }
+}
+
 .note-form textarea:focus,
 .note-form input:focus,
 .note-form select:focus {
