@@ -11,6 +11,7 @@ import { Hub } from './hub.js';
 import { Hud } from './hud.js';
 import { MemoryScene } from './memory-scene.js';
 import { PeerAvatars } from './presence.js';
+import { Readout } from './readout.js';
 import { Stage, xrSupported } from './stage.js';
 import { loadFonts } from './text.js';
 import { XRInput } from './xr-input.js';
@@ -27,6 +28,12 @@ const SELF_DEVELOP = 0.03; // added per second while held
 const SHAKE_SPEED = 0.55; // m/s a controller must move for a reversal to count
 const STEP_IN_M = 0.3; // print this close to the eyes steps in
 const LINE_BELOW_EYES = 0.28; // m, where the line hangs in VR
+// Stepping in: the print rises to the eye line and grows until its photo is
+// all there is to see, while the paper flash takes over for the last part.
+const RISE_S = 0.8; // s from the hand to filling the view
+const FLASH_S = 0.3; // s of paper flash, ending with the rise
+const RISE_M = 0.32; // m in front of the eyes where the print ends up
+const RISE_GROW = 6; // times bigger at the end: its photo then overfills the view
 const textureLoader = new THREE.TextureLoader();
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -45,6 +52,8 @@ class World {
     this.hud = new Hud(document.getElementById('hud'));
     this.hud.showLoading('Warming up the darkroom');
     this.stage = new Stage(document.getElementById('stage'));
+    // early, so errors while loading are caught too
+    if (params.has('debug')) this.readout = new Readout(this.stage.camera);
     this.audio = createAudio();
     this.hub = new Hub();
     this.stage.scene.add(this.hub.group);
@@ -60,7 +69,7 @@ class World {
     this.busy = false;
     this.held = null;
     this.t = 0;
-    this.fade = { mesh: makeFadeSphere(), from: 0, to: 0, start: 0, dur: 0, resolve: null };
+    this.fade = { mesh: makeFadeSphere(), from: 0, to: 0, elapsed: 0, dur: 0, resolve: null };
     this.stage.scene.add(this.fade.mesh);
     this.hubSound = null;
     this.memSound = null;
@@ -91,7 +100,14 @@ class World {
 
     this.hud.hideLoading();
     if (params.has('debug')) window.unfade = this;
-    this.stage.start((dt, t) => this.frame(dt, t));
+    this.stage.start((dt, t) => {
+      try {
+        this.frame(dt, t);
+      } finally {
+        // also after a frame that threw, so its error reaches the readout
+        this.readout?.update(this.stage.renderer.info.render, this.stage.presenting);
+      }
+    });
     const direct = params.get('memory');
     if (direct && this.items.has(direct)) this.openDirect(direct);
   }
@@ -176,6 +192,9 @@ class World {
     this.memSound?.setVivid(this.memory.revived ? 1 : (p.bloomed / p.total) * 0.6);
     if (this.memory.revived && !wasRevived) {
       this.audio.oneShot('revive');
+      // the sound swells first; the colour and then the title follow it (memory-scene.js)
+      const layers = this.memory.spec.scene.soundLayers;
+      for (const layer of layers.length ? layers : ['room_tone']) this.memSound?.swell(layer);
       this.syncRevived();
     }
   }
@@ -205,13 +224,14 @@ class World {
     if (this.mode === 'hub') this.hubFrame(dt, t, head, pointers, actions, presenting);
     else this.memoryFrame(dt, t, head, pointers, actions);
 
-    this.updateFade(t, head);
+    this.updateFade(dt, head);
     if (!IS_MIRROR) this.sendPresence(head, pointers, presenting);
     const space = this.mode === 'memory' ? this.memory.group : this.hub.group;
     this.avatars.update(dt, this.room.peers, {
       space: this.mode,
       memoryId: this.memory.spec?.id,
       toWorld: (arr) => new THREE.Vector3(...arr).applyMatrix4(space.matrixWorld),
+      viewer: head.position,
       ignoreRoles: ['mirror', 'guide', 'studio'],
       // the mirror looks out of its target's eyes, so it must not draw them
       ignoreIds: IS_MIRROR && this.mirrorTarget ? [this.mirrorTarget] : [],
@@ -245,7 +265,9 @@ class World {
 
   hubFrame(dt, t, head, pointers, actions, presenting) {
     let hovered = null;
-    if (this.held) {
+    if (this.held?.rising) {
+      this.updateRise(t, head);
+    } else if (this.held) {
       this.updateHeld(dt, t, head, pointers, actions, presenting);
     } else {
       for (const p of pointers) {
@@ -262,7 +284,7 @@ class World {
     }
     this.hub.update(dt, t, hovered);
     this.hub.dust && (this.hub.dust.material.uniforms.uScale.value = this.pointScale());
-    if (presenting) {
+    if (presenting && !this.held?.rising) {
       const developed = this.held && this.held.print.develop >= DEVELOPED;
       this.hub.hint(this.held ? (developed ? 'Hold it up to your eyes' : 'Shake it') : 'Point at a photo and pull the trigger');
     } else this.hub.hint('');
@@ -330,7 +352,26 @@ class World {
     else if (putBack) this.putBack();
   }
 
+  // Only the print and the fade move; the camera stays with the head.
+  updateRise(t, head) {
+    const { print, rising } = this.held;
+    const g = print.group;
+    const u = Math.min(1, (t - rising.start) / RISE_S);
+    // lifted and turned upright quickly, then growing late and fast: a fall more than a lift
+    const k = 1 - (1 - u) ** 3;
+    const s = 1 + (RISE_GROW - 1) * u * u * u;
+    const yaw = yawOf(head.quaternion);
+    const ahead = new THREE.Vector3(0, 0, -1).applyAxisAngle(UP, yaw);
+    // straight ahead at eye height, where the memory's photo will be
+    const end = head.position.clone().addScaledVector(ahead, RISE_M);
+    end.y -= print.image.position.y * s;
+    g.position.lerpVectors(rising.from, end, k);
+    g.quaternion.slerpQuaternions(rising.turn, new THREE.Quaternion().setFromAxisAngle(UP, yaw), k);
+    g.scale.setScalar(s);
+  }
+
   putBack() {
+    if (this.held.rising) return;
     const { print } = this.held;
     this.hub.giveBack(print);
     if (!print.revived) print.setDevelop(Math.max(0.3, Math.min(print.develop, 0.3)));
@@ -342,11 +383,18 @@ class World {
     if (this.busy) return;
     this.busy = true;
     this.audio.oneShot('step-in');
-    await this.fadeTo(1, 0.7, '#f1e9dc');
+    this.held.rising = { start: this.t, from: print.group.position.clone(), turn: print.group.quaternion.clone() };
+    print.setOnTop(true);
+    await this.fadeTo(1, FLASH_S, '#f1e9dc', RISE_S - FLASH_S);
     const loaded = await this.preload;
+    print.setOnTop(false);
+    print.group.scale.setScalar(1);
     this.hub.giveBack(print);
+    // straight onto its peg, not falling from where the rise left it
+    print.group.position.copy(print.slot);
     this.held = null;
     if (!loaded) {
+      this.desk.setMode('look');
       await this.fadeTo(0, 0.4);
       this.busy = false;
       return;
@@ -444,16 +492,25 @@ class World {
       if (p.space === 'memory' && p.memoryId && (this.mode !== 'memory' || this.memory.spec?.id !== p.memoryId) && this.items.has(p.memoryId)) this.openDirect(p.memoryId);
       else if (p.space === 'hub' && this.mode === 'memory') this.leaveMemory();
     }
-    const space = this.mode === 'memory' ? this.memory.group : this.hub.group;
-    space.updateMatrixWorld(true);
-    const pos = new THREE.Vector3(...p.head.p).applyMatrix4(space.matrixWorld);
-    const q = new THREE.Quaternion(...p.head.q).premultiply(space.getWorldQuaternion(new THREE.Quaternion()));
-    cam.position.lerp(pos, Math.min(1, dt * 8));
-    cam.quaternion.slerp(q, Math.min(1, dt * 6));
-    this.mirrorHeld(p, space);
+    // Follow only while both are in the same place: while one changes place its
+    // pose belongs to the other space, and reading it in this one sends the
+    // camera into the floor. Hold still under the fade instead.
+    const here = p.space === this.mode && (p.space === 'hub' || p.memoryId === this.memory.spec?.id);
+    if (here) {
+      const space = this.mode === 'memory' ? this.memory.group : this.hub.group;
+      space.updateMatrixWorld(true);
+      const pos = new THREE.Vector3(...p.head.p).applyMatrix4(space.matrixWorld);
+      const q = new THREE.Quaternion(...p.head.q).premultiply(space.getWorldQuaternion(new THREE.Quaternion()));
+      // behind a full fade go straight there; otherwise ease, the same at any frame rate
+      const hidden = this.fade.mesh.material.opacity > 0.95;
+      cam.position.lerp(pos, hidden ? 1 : 1 - Math.exp(-dt * 8));
+      cam.quaternion.slerp(q, hidden ? 1 : 1 - Math.exp(-dt * 6));
+      this.mirrorHeld(p, space);
+    }
+    const name = target.name || 'the headset';
     const prog = this.mode === 'memory' ? this.memory.progress() : { bloomed: 0, total: 0 };
-    const title = this.mode === 'memory' ? this.memory.spec?.title : p.held ? this.items.get(p.held.memoryId)?.spec.title : 'In the darkroom';
-    this.hud.setMirror({ who: `Watching ${target.name || 'the headset'}`, title, ...prog });
+    const title = this.mode === 'memory' ? this.memory.spec?.title : p.held ? this.items.get(p.held.memoryId)?.spec.title : '';
+    this.hud.setMirror({ who: this.mode === 'memory' ? `${name} is inside` : `${name} is in the darkroom`, title, ...prog });
   }
 
   mirrorHeld(p, space) {
@@ -499,22 +556,25 @@ class World {
 
   // ---- fades, sound, overlay ------------------------------------------------
 
-  fadeTo(to, seconds, color) {
+  fadeTo(to, seconds, color, delay = 0) {
     const f = this.fade;
     if (color) f.mesh.material.color.set(color);
     f.from = f.mesh.material.opacity;
     f.to = to;
-    f.start = this.t;
+    f.elapsed = -delay;
     f.dur = seconds;
     f.resolve?.();
     return new Promise((resolve) => (f.resolve = resolve));
   }
 
-  updateFade(t, head) {
+  // Counted in capped frame steps, not clock time, so one long frame (a shader
+  // compiling, the background plate being made) cannot jump a fade.
+  updateFade(dt, head) {
     const f = this.fade;
     f.mesh.position.copy(head.position);
     if (!f.resolve) return;
-    const k = f.dur > 0 ? Math.min(1, (t - f.start) / f.dur) : 1;
+    f.elapsed += dt;
+    const k = f.dur > 0 ? Math.min(1, Math.max(0, f.elapsed / f.dur)) : 1;
     f.mesh.material.opacity = f.from + (f.to - f.from) * k * k * (3 - 2 * k);
     f.mesh.visible = f.mesh.material.opacity > 0.001;
     if (k >= 1) {

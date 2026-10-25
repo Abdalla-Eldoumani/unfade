@@ -15,6 +15,7 @@ export class Hud {
         <p class="edge hud-mirror-who"></p>
         <h2 class="hud-mirror-title"></h2>
         <div class="hud-mirror-bar"><span></span></div>
+        <p class="edge hud-mirror-count"></p>
       </div>
       <div class="hud-bottom">
         <p class="hud-hint"></p>
@@ -70,6 +71,7 @@ export class Hud {
     const pct = total ? (bloomed / total) * 100 : 0;
     this.mirrorEl.querySelector('.hud-mirror-bar').hidden = !total;
     this.mirrorEl.querySelector('.hud-mirror-bar span').style.width = `${pct}%`;
+    this.mirrorEl.querySelector('.hud-mirror-count').textContent = total ? `${bloomed} of ${total} back` : '';
   }
 
   hideXrOverlay(presenting) {

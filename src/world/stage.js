@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 
+// Pixels per eye against the headset's own default, fixed when the session
+// starts. The second lever if the headset drops frames: try 0.8.
+const FRAMEBUFFER_SCALE = 1;
+
 // Renderer, scene and camera, shared by the darkroom and the memories.
 // On a headset WebXR drives the camera; on a laptop or phone the desktop
 // controls do.
@@ -12,6 +16,7 @@ export class Stage {
     this.renderer.xr.enabled = true;
     this.renderer.xr.setReferenceSpaceType('local-floor');
     this.renderer.xr.setFoveation(1);
+    this.renderer.xr.setFramebufferScaleFactor(FRAMEBUFFER_SCALE);
     container.appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
@@ -73,7 +78,13 @@ export class Stage {
       this.xrFrame = frame || null;
       this.timer.update(time);
       const dt = Math.min(0.1, this.timer.getDelta());
-      onFrame(dt, this.timer.getElapsed(), frame);
+      // a frame that throws still draws, so the headset never freezes on its
+      // last image and the ?debug readout can show the error
+      try {
+        onFrame(dt, this.timer.getElapsed(), frame);
+      } catch (err) {
+        console.error(err);
+      }
       this.renderer.render(this.scene, this.camera);
     });
   }

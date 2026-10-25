@@ -1,5 +1,17 @@
 import * as THREE from 'three';
 
+// What the haze around a memory works out for every pixel it covers, the
+// fourth lever if the headset drops frames: 2 the photo's own blur with the
+// ragged bloom edges behind the photo, 1 the blur without them, 0 one flat colour.
+const HAZE_DETAIL = 2;
+
+// Behind the photo, where depth edges open, the haze shows the photo again.
+// From where the camera stood that copy lines up and hides the gaps; once the
+// head moves it reads as a second copy beside the first (a ghost cup by the
+// cup). At 1 the haze there goes as soft as the haze around the photo as the
+// eyes move 0.03 to 0.2 m away. 0 switches this off.
+const GAP_BLUR = 1;
+
 // All colour maths happens in linear space; each fragment shader ends with
 // colorspace_fragment so three converts to the display's sRGB.
 const DITHER = /* glsl */ `
@@ -135,12 +147,19 @@ export function memoryMaterial(photo, { aspect, palette }) {
 // belongs to it. Behind the photo it matches the photo's own look (faded or
 // back), so the gaps at depth edges read as soft focus, not cracks.
 // uBloom should be the memory material's own uniform, shared.
-export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, bloom }) {
+// plate, if given, is the background plate (depth-mesh.js): shown through the
+// gaps instead of the photo once the head moves.
+export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, bloom, plate = null }) {
+  const plateDim = plate ? Math.max(plate.image.width, plate.image.height) : 1;
   return new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
+    defines: { HAZE_DETAIL, GAP_BLUR: GAP_BLUR.toFixed(2), GAP_FILL: plate ? 1 : 0 },
     uniforms: {
       uPhoto: { value: photo },
+      uPlate: { value: plate },
+      // the same blur on the smaller plate is that many fewer levels
+      uPlateShift: { value: Math.max(0, Math.log2((maxDim || 512) / plateDim)) },
       // an explicit mip level: past the photo's edge the uv is clamped, so
       // automatic level selection would pick the sharpest level and streak
       uLod: { value: Math.max(1, Math.log2(maxDim || 512) - 3.2) },
@@ -156,10 +175,18 @@ export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, blo
     },
     vertexShader: /* glsl */ `
       varying vec3 vDir;
-      void main() { vDir = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }
+      varying float vLean;
+      void main() {
+        vDir = position;
+        // how far the eye is from where the camera stood (the sphere's centre)
+        vLean = distance(cameraPosition, (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
     `,
     fragmentShader: /* glsl */ `
       uniform sampler2D uPhoto;
+      uniform sampler2D uPlate;
+      uniform float uPlateShift;
       uniform float uLod;
       uniform vec2 uTan;
       uniform vec3 uBase;
@@ -169,6 +196,7 @@ export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, blo
       uniform float uCore;
       uniform float uFadeIn;
       varying vec3 vDir;
+      varying float vLean;
       ${DITHER}
       ${FADED}
       ${BLOOM}
@@ -177,6 +205,7 @@ export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, blo
         vec3 col = uBase;
         float inside = 0.0;
         float local = uVivid;
+        #if HAZE_DETAIL > 0
         if (d.z < -0.02) {
           vec2 p = d.xy / -d.z;
           vec2 uv = 0.5 + p / (2.0 * uTan);
@@ -184,11 +213,21 @@ export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, blo
           inside = 1.0 - clamp(length(outside) * 3.0, 0.0, 1.0);
           float w = exp(-length(outside) * 1.4) * smoothstep(-0.02, -0.4, d.z);
           // behind the photo, the same blur the faded photo has; further out, all the way
-          float lod = mix(uLod + 1.0, 2.5, inside);
+          float lean = smoothstep(0.03, 0.2, vLean);
+          float lod = mix(uLod + 1.0, mix(2.5, uLod, GAP_BLUR * lean), inside);
           vec3 c = textureLod(uPhoto, clamp(uv, 0.0, 1.0), lod).rgb;
+          #if GAP_FILL
+          vec3 behind = textureLod(uPlate, clamp(uv, 0.0, 1.0), max(0.0, lod - uPlateShift)).rgb;
+          c = mix(c, behind, inside * lean);
+          #endif
           col = mix(uBase, c * mix(0.75, 1.0, inside), w);
+          #if HAZE_DETAIL > 1
           local = mix(uVivid, bloomAt(clamp(uv, 0.0, 1.0), uCore), inside);
+          #else
+          local = mix(uVivid, uCore, inside);
+          #endif
         }
+        #endif
         col *= mix(mix(0.5, 1.0, smoothstep(-0.7, 0.25, d.y)), 1.0, inside);
         col = mix(fadedLook(col, uPaper * mix(0.4, 1.0, inside), uCast), col, local);
         col += (ign(gl_FragCoord.xy) - 0.5) * 0.012;

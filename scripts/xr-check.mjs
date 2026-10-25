@@ -17,6 +17,8 @@ const SAMPLES = JSON.parse(readFileSync(new URL('../public/memories/index.json',
 // Software rendering keeps the check the same on every laptop, so it runs at a
 // few frames per second; every wait below is a poll with a deadline, never a fixed sleep.
 const ARGS = ['--ignore-certificate-errors', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
+// Thrown on purpose to prove the ?debug readout shows errors; never counted as a failure.
+const INTENTIONAL = 'intentional error from xr-check';
 
 const results = [];
 let shot = 0;
@@ -51,6 +53,16 @@ async function until(page, fn, arg, ms) {
 async function frames(page, n) {
   const f0 = await page.evaluate(() => window.unfade.stage.renderer.info.render.frame);
   return until(page, ([f0, n]) => window.unfade.stage.renderer.info.render.frame >= f0 + n, [f0, n], 20000);
+}
+
+// What the ?debug readout shows for the frame just drawn (both eyes): these
+// carry over to the Quest, unlike the frame time here.
+async function draws(page, where) {
+  const text = await page.evaluate(() => {
+    const r = window.unfade.stage.renderer.info.render;
+    return `${r.calls} calls, ${r.triangles.toLocaleString('en-US')} triangles`;
+  });
+  console.log(`note  ${where}, both eyes: ${text}`);
 }
 
 async function snap(page, name) {
@@ -97,8 +109,12 @@ async function playOne(page, index) {
   await page.evaluate(() => window.__xr.quaternion.set(0, 0, 0, 1));
   await aimAt(page, index);
   await frames(page, 3);
-  await press(page, 'trigger');
-  const took = await until(page, (id) => window.unfade.held?.print.item.spec.id === id, id, 8000);
+  // a press during a fade is ignored on purpose, so try again, up to three presses
+  let took = false;
+  for (let tries = 0; tries < 3 && !took; tries++) {
+    await press(page, 'trigger');
+    took = await until(page, (id) => window.unfade.held?.print.item.spec.id === id, id, 3000);
+  }
   if (!report(took, `takes the print off the line`, id)) return;
 
   // Swing the controller side to side once per rendered frame, so the shake
@@ -117,8 +133,16 @@ async function playOne(page, index) {
   await page.evaluate(() => window.__xr.controllers.right.position.set(0, 1.55, -0.12));
   const inside = await until(page, (id) => window.unfade.mode === 'memory' && window.unfade.memory.spec?.id === id, id, 20000);
   if (!report(inside, 'holding it to the eyes steps inside')) return;
-  await until(page, () => window.unfade.memory.anchors.length > 0, null, 10000);
+  // lower the hand to the hip, pointing at the floor: out of the view and away from every light
+  await page.evaluate(() => {
+    const c = window.__xr.controllers.right;
+    c.position.set(0.2, 1.05, -0.2);
+    c.quaternion.set(-Math.SQRT1_2, 0, 0, Math.SQRT1_2);
+  });
+  // once the fade in is over, so the fade itself is not counted
+  await until(page, () => window.unfade.memory.anchors.length > 0 && !window.unfade.busy, null, 20000);
   await frames(page, 3);
+  await draws(page, `inside ${id}`);
   await snap(page, `${id}-inside`);
 
   const points = await page.evaluate(() =>
@@ -131,12 +155,16 @@ async function playOne(page, index) {
   }
   await page.evaluate(() => window.__xr.quaternion.set(0, 0, 0, 1));
   const revived = await until(page, () => window.unfade.memory.revived, null, 30000);
-  await frames(page, 6);
-  await snap(page, `${id}-revived`);
   if (!report(revived, 'every light back revives the memory')) return;
+  // the colour first, then the title in the person's words
+  const titled = await until(page, () => window.unfade.memory.vivid >= 1 && window.unfade.memory.titleCard?.material.opacity >= 0.99, null, 30000);
+  await frames(page, 2);
+  await snap(page, `${id}-revived`);
+  if (!report(titled, 'the colour comes back, then the title writes in')) return;
 
   await press(page, 'b-button');
-  const back = await until(page, () => window.unfade.mode === 'hub', null, 15000);
+  // the fade back to the darkroom keeps it busy, and a busy darkroom ignores the trigger
+  const back = await until(page, () => window.unfade.mode === 'hub' && !window.unfade.busy, null, 15000);
   report(back, 'B goes back to the darkroom');
 }
 
@@ -148,8 +176,8 @@ try {
   const missing = [];
   // A failed request is listed but does not fail the check: without npm run server
   // the API answers 502 and the pages fall back to the bundled samples on purpose.
-  page.on('console', (m) => m.type() === 'error' && !m.text().startsWith('Failed to load resource') && errors.push(m.text()));
-  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => m.type() === 'error' && !m.text().startsWith('Failed to load resource') && !m.text().includes(INTENTIONAL) && errors.push(m.text()));
+  page.on('pageerror', (e) => !e.message.includes(INTENTIONAL) && errors.push(e.message));
   page.on('response', (r) => r.status() >= 400 && missing.push(`${r.status()} ${new URL(r.url()).pathname}`));
   await page.addInitScript({
     content: `${IWER};
@@ -168,6 +196,13 @@ try {
     const presenting = await until(page, () => window.unfade.stage.presenting, null, 15000);
     if (report(presenting, 'enters VR on the emulated Quest 2')) {
       await frames(page, 4);
+      // Inside the headset the readout is the only console, so a thrown error has to show in it.
+      await page.evaluate((m) => setTimeout(() => { throw new Error(m); }), INTENTIONAL);
+      const shown = await until(page, (m) => window.unfade.readout?.text.includes(m), INTENTIONAL, 15000);
+      const line = await page.evaluate(() => window.unfade.readout?.text.split('\n')[0] ?? '');
+      report(shown && / ms, worst .* calls .* triangles/.test(line), 'the debug readout shows frame time, draw calls and the last error', line);
+      await frames(page, 2);
+      await draws(page, 'darkroom');
       await snap(page, 'darkroom');
       const ids = await page.evaluate(() => window.unfade.hub.prints.map((p) => p.item.spec.id));
       for (const id of SAMPLES) {

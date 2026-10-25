@@ -1,14 +1,17 @@
 import * as THREE from 'three';
 import { particleMaterial } from './shaders.js';
 
+// Share of every type's count that is made, in the darkroom and the memories.
+// The first lever if the headset drops frames: try 0.5.
+const PARTICLE_SHARE = 1;
 const COUNTS = { dust: 900, snow: 1400, rain: 1600, fireflies: 140, confetti: 700, petals: 260, mist: 90 };
 const DEFAULT_COLORS = { snow: ['#ffffff', '#f4f7ff', '#e8eef8', '#ffffff'], rain: ['#cfd8e6', '#b8c4d6', '#dfe6f1', '#c4cfdf'] };
 
 // Something in the air that belongs to the memory. Motion is all in the
 // vertex shader, so thousands of particles cost one draw call.
 export function makeParticles(type, palette = []) {
-  if (!type || type === 'none') return null;
-  const n = COUNTS[type] ?? 600;
+  const n = Math.round((COUNTS[type] ?? 600) * PARTICLE_SHARE);
+  if (!type || type === 'none' || n < 1) return null;
   const pos = new Float32Array(n * 3);
   const seed = new Float32Array(n * 3);
   const color = new Float32Array(n);
