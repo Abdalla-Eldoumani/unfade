@@ -27,6 +27,8 @@ body {
   display: flex;
   align-items: baseline;
   gap: var(--space-4);
+  /* a faded memory is cream, and paper-coloured words vanish on it without a shadow */
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.7);
 }
 
 .hud-brand {
@@ -65,6 +67,11 @@ body {
   display: grid;
   gap: var(--space-1);
   text-align: left;
+}
+
+/* a ghost button is see-through, and over a faded memory its words were 1.7:1 */
+.hud-buttons button.ghost {
+  background: rgba(12, 9, 7, 0.6);
 }
 
 .hud-buttons button .edge {
