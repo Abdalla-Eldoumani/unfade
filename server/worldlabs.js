@@ -80,7 +80,7 @@ export class Worlds {
     const photo = await this.photoFor(id);
     if (!photo) return this.fail(id, 'There is no memory with that id.');
     if (!hasWorldKey()) return this.fail(id, 'WORLDLABS_API_KEY is not set on the server, so no world was built.');
-    if (this.used >= MAX_WORLDS) return this.fail(id, `This run reached its cap of ${MAX_WORLDS} worlds.`);
+    if (this.used >= MAX_WORLDS) return this.fail(id, `This run reached its cap of ${MAX_WORLDS} world${MAX_WORLDS === 1 ? '' : 's'}.`);
     this.used++;
     this.jobs.set(id, { status: 'queued', progress: 0 });
     this.queue.push({ id, photo });
