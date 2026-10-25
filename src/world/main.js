@@ -28,6 +28,9 @@ const SELF_DEVELOP = 0.03; // added per second while held
 const SHAKE_SPEED = 0.55; // m/s a controller must move for a reversal to count
 const STEP_IN_M = 0.3; // print this close to the eyes steps in
 const LINE_BELOW_EYES = 0.28; // m, where the line hangs in VR
+// m a laptop can walk (WASD) inside a generated world. A close-up's subject
+// is a front-only shell a hand's width away: past a lean you see its back.
+const WALK_M = { closeup: 0.2, room: 1, street: 1, landscape: 1 };
 // Stepping in: the print rises to the eye line and grows until its photo is
 // all there is to see, while the paper flash takes over for the last part.
 const RISE_S = 0.8; // s from the hand to filling the view
@@ -444,8 +447,9 @@ class World {
     this.memory.enteredAt = this.t;
     this.mode = 'memory';
     if (!this.stage.presenting && !IS_MIRROR) {
-      this.desk.setOrigin(head.position, yaw, 0);
-      this.desk.setMode('look', { allowMove: true });
+      this.desk.setOrigin(head.position, yaw, this.memory.splat ? this.memory.viewPitch : 0);
+      this.desk.setMode('look', { allowMove: true, radius: this.memory.splat ? WALK_M[this.memory.spec.scene.scale] : undefined });
+      this.desk.blocked = this.memory.splat ? (a, b) => this.memory.blocked(a, b) : null;
     }
     this.hubSound?.stop(1.5);
     this.hubSound = null;
