@@ -120,10 +120,12 @@ export function memoryMaterial(photo, { aspect, palette }) {
       varying vec2 vUv;
       varying float vEdge;
       varying vec3 vWorldPos;
+      varying float vLean;
       void main() {
         vUv = uv;
         vEdge = aEdge;
         vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+        vLean = distance(cameraPosition, (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
@@ -137,6 +139,7 @@ export function memoryMaterial(photo, { aspect, palette }) {
       varying vec2 vUv;
       varying float vEdge;
       varying vec3 vWorldPos;
+      varying float vLean;
       ${DITHER}
       ${FADED}
       ${BLOOM}
@@ -151,16 +154,22 @@ export function memoryMaterial(photo, { aspect, palette }) {
         float angleFade = smoothstep(0.02, 0.18, facing);
 
         float local = bloomAt(vUv, uVivid);
-        // progressively blur stretched triangles at depth edges
-        float edgeBlur = smoothstep(0.15, 0.6, vEdge) * 5.0;
-        vec3 c = texture2D(uPhoto, vUv, (1.0 - local) * 2.4 + edgeBlur).rgb;
-        vec3 col = mix(fadedLook(c, uPaper, uCast), c, local);
-        col += (hash(vUv * 1024.0 + fract(uTime * 7.0)) - 0.5) * mix(0.06, 0.015, local);
+        // progressively blur stretched triangles at depth edges; seen from
+        // the centre (a laptop, the mirror) none look stretched, so the edges
+        // stay as sharp as the photo and the cut fill behind them
+        float edgeBlur = smoothstep(0.15, 0.6, vEdge) * 5.0 * smoothstep(0.004, 0.025, vLean);
         // The rim dissolves over a wide, uneven margin with rounded corners,
         // like the edge of a print left in the sun, so no rectangle shows.
         vec2 q = abs(vUv - 0.5) * 2.0;
         float r = pow(pow(q.x, 6.0) + pow(q.y, 6.0), 1.0 / 6.0) + (vnoise(vUv * 7.0) - 0.5) * 0.08;
         float rim = 1.0 - smoothstep(0.78, 1.0, r);
+        // and blurs as it goes, exactly as the haze behind it does there, so a
+        // cut near the rim shows the same softness as the sheet around it
+        float edgeD = pow(pow(q.x, 4.0) + pow(q.y, 4.0), 0.25) + (vnoise(vUv * 2.6) - 0.5) * 0.18;
+        float rimBlur = smoothstep(0.45, 1.0, edgeD) * 4.0 * (1.0 - rim);
+        vec3 c = texture2D(uPhoto, vUv, (1.0 - local) * 2.4 + edgeBlur + rimBlur).rgb;
+        vec3 col = mix(fadedLook(c, uPaper, uCast), c, local);
+        col += (hash(vUv * 1024.0 + fract(uTime * 7.0)) - 0.5) * mix(0.06, 0.015, local);
         // Depth cliffs and edge-on triangles are cut, not blended: what is
         // behind them has to show, and a half-clear cliff reads as a ghost.
         float edgeFade = 1.0 - smoothstep(0.3, 0.85, vEdge);
@@ -268,7 +277,11 @@ export function peripheryMaterial(photo, { tanH, tanV, env, maxDim, aspect, bloo
         edgeD = mix(4.0, edgeD, forward);
         float near = 1.0 - smoothstep(0.9, 2.6, edgeD);
 
-        vec3 world = surroundings(d, mix(0.0, 6.5, near));
+        // The place comes into focus as the memory comes back: each light
+        // brought back clears the haze around the photo a little more, from
+        // just past its rim outwards (the rim itself stays soft).
+        float clear = uVivid * smoothstep(1.2, 1.8, edgeD);
+        vec3 world = surroundings(d, mix(0.0, mix(6.5, 3.0, clear), near));
         #if HAS_ENV_MAP
         vec3 worldMean = textureLod(uEnvMap, vec2(0.5), 20.0).rgb;
         #else
@@ -296,8 +309,24 @@ export function peripheryMaterial(photo, { tanH, tanV, env, maxDim, aspect, bloo
         vec2 outside = max(abs(uv - 0.5) - 0.5, 0.0) * 2.0 * uTan;
         inside = 1.0 - clamp(length(outside) * 3.0, 0.0, 1.0);
         float lean = smoothstep(0.03, 0.2, vLean);
-        float edgeBlur = smoothstep(0.45, 1.0, edgeD) * 4.0;
-        float lod = mix(uLod + 2.0, mix(2.5, uLod, GAP_BLUR * lean), inside * forward) + edgeBlur;
+        // The sheet's own opacity here (memoryMaterial's rim): where it is
+        // solid, a cut in it shows the photo unblurred, or the cut outlines itself.
+        float r6 = pow(pow(q.x, 6.0) + pow(q.y, 6.0), 1.0 / 6.0) + (vnoise(uv * 7.0) - 0.5) * 0.08;
+        float sheetRim = 1.0 - smoothstep(0.78, 1.0, r6);
+        float edgeBlur = smoothstep(0.45, 1.0, edgeD) * 4.0 * (1.0 - sheetRim);
+        // Where the sheet is cut at a depth edge, this shows through. Seen
+        // from the centre (a laptop, the mirror) it lines up with the photo,
+        // so at the sheet's own sharpness the cut's stepped outline vanishes;
+        // a headset eye sits off centre, where a sharp copy doubles the edge.
+        vec2 texel = uv * vec2(textureSize(uPhoto, 0));
+        float sheetLod = max(0.0, 0.5 * log2(max(dot(dFdx(texel), dFdx(texel)), dot(dFdy(texel), dFdy(texel)))));
+        #if HAZE_DETAIL > 1
+        float here = bloomAt(clamp(uv, 0.0, 1.0), uCore);
+        #else
+        float here = uCore;
+        #endif
+        float gapLod = mix(sheetLod + (1.0 - here) * 2.4, 2.5, smoothstep(0.004, 0.025, vLean));
+        float lod = mix(uLod + 2.0, mix(gapLod, uLod, GAP_BLUR * lean), inside * forward) + edgeBlur;
         vec3 c = textureLod(uPhoto, clamp(uv, 0.0, 1.0), lod).rgb;
         #if GAP_FILL
         vec3 behind = textureLod(uPlate, clamp(uv, 0.0, 1.0), max(0.0, lod - uPlateShift)).rgb;
@@ -308,14 +337,12 @@ export function peripheryMaterial(photo, { tanH, tanV, env, maxDim, aspect, bloo
         vec3 haze = mix(world, photoEdge, (1.0 - smoothstep(0.85, 1.7, edgeD)) * 0.45 * forward);
         // the blurred copy ends where the photo's own rim ends, so no band
         // of it is left standing around the photo
-        float w = (1.0 - smoothstep(0.75, 1.05, edgeD)) * forward;
+        // and never less of the photo than the sheet itself still shows, so
+        // a cut there does not open onto the haze
+        float w = max(1.0 - smoothstep(0.75, 1.05, edgeD), sheetRim) * forward;
         col = mix(haze, c, w);
         inside = w;
-        #if HAZE_DETAIL > 1
-        local = mix(uVivid, bloomAt(clamp(uv, 0.0, 1.0), uCore), inside * forward);
-        #else
-        local = mix(uVivid, uCore, inside * forward);
-        #endif
+        local = mix(uVivid, here, inside * forward);
         #endif
         col = mix(fadedLook(col, uPaper * mix(0.4, 1.0, inside), uCast), col, local);
         col += (ign(gl_FragCoord.xy) - 0.5) * 0.012 * max(0.15, dot(col, vec3(0.3, 0.6, 0.1)));
