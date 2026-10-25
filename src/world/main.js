@@ -281,6 +281,17 @@ class World {
           break;
         }
       }
+      // the keyboard's way to take one: Enter takes the print straight ahead
+      if (!this.held && actions.stepIn && !presenting && !this.busy) {
+        const ahead = new THREE.Vector3(0, 0, -1).applyQuaternion(head.quaternion);
+        let best = null;
+        let bestDot = -Infinity;
+        for (const print of this.hub.prints) {
+          const dot = print.group.getWorldPosition(new THREE.Vector3()).sub(head.position).normalize().dot(ahead);
+          if (dot > bestDot) [best, bestDot] = [print, dot];
+        }
+        if (best) this.pickUp(best, {});
+      }
     }
     this.hub.update(dt, t, hovered);
     this.hub.dust && (this.hub.dust.material.uniforms.uScale.value = this.pointScale());
