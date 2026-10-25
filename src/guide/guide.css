@@ -146,6 +146,11 @@ body {
   color: var(--ember);
 }
 
+/* the hidden attribute alone loses to display: grid below */
+.note-form[hidden] {
+  display: none;
+}
+
 .note-form {
   display: grid;
   gap: var(--space-3);
