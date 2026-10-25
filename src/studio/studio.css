@@ -43,6 +43,10 @@ a {
   display: grid;
   gap: var(--space-4);
   align-content: start;
+  /* the spots are placed on the photo, so it stays in view while the list below them scrolls */
+  position: sticky;
+  top: var(--space-5);
+  align-self: start;
 }
 
 .print {
@@ -495,5 +499,9 @@ label.sound {
   }
   .print {
     transform: none;
+  }
+  /* one column: a stuck photo would cover the fields below it */
+  .print-area {
+    position: static;
   }
 }
