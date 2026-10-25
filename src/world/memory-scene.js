@@ -64,7 +64,11 @@ export class MemoryScene {
     this.mesh.frustumCulled = false;
     this.group.add(this.mesh);
 
-    const base = new THREE.Color(spec.palette.at(-1) || '#2b1d16').multiplyScalar(0.35);
+    // average every palette colour so the haze behind the photo feels warm,
+    // not nearly black (the old last-colour pick was #1b1009 for the-cat)
+    const base = new THREE.Color(0, 0, 0);
+    for (const hex of spec.palette) base.add(new THREE.Color(hex));
+    base.multiplyScalar(0.4 / Math.max(1, spec.palette.length));
     const maxDim = Math.max(spec.photo.width, spec.photo.height);
     let plate = null;
     if (GAP_FILL) {
