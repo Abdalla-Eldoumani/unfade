@@ -42,6 +42,7 @@ A memory is a folder with four files: `memory.json`, `photo.jpg`, `thumb.jpg`, `
 | `palette` | Up to six hex colours from the photo, most common first. |
 | `anchors` | Zero to three spots. `x` and `y` are 0 to 1 from the top left of the photo. `label` at most 32 characters, `question` at most 80, `note` at most 160 (the person's own words, shown once the spot is back). `sound` is a layer name or `none`. A memory with no anchors gets one in the centre. |
 | `source.analysis` | `claude`, `fallback` or `manual`: who suggested the anchors. |
+| `world` | Optional, and `null` when absent: the generated 3D place around the photo (World Labs Marble, `server/worldlabs.js`). `{ splat, splatSmall, pano, collider, scale, groundOffset }`: four server paths of the form `/api/world/<id>/file/<name>` (the 500k splat, the 100k splat for headsets, the 360° panorama, the collider GLB), Marble's `metric_scale_factor` and `ground_plane_offset`. Never written into `memory.json`; the server adds it to `GET /api/memories` when the files are on disk. Anything malformed normalizes to `null`, so every older memory still loads. |
 
 `normalizeMemory()` fills defaults and clamps every field and never throws; `validateMemory()` returns the list of problems that would stop a memory from showing. Every page runs both on everything it loads.
 
@@ -107,8 +108,13 @@ One Node server (`server/index.js`). In development it listens on `http://localh
 | `DELETE /api/memories/:id` | | `{ removed }`; saved memories only |
 | `POST /api/analyze` | `{ image, width, height, hints, stats }`, the image as a data URL with its long edge at most 2600 px | `{ analysis, source, model, warning?, cached? }` |
 | `GET /saved/:id/:file` | | the file |
+| `POST /api/world/:id` | | `202` with the world's status at once; generation runs in the background, one at a time |
+| `GET /api/world/:id` | | `{ status: 'none' }`, `{ status: 'queued' \| 'pending', progress }`, `{ status: 'ready', world }` or `{ status: 'failed', reason }` |
+| `GET /api/world/:id/file/:name` | | a world file: from `data/memories/<id>/world/`, or `data/worlds/<id>/` for a bundled sample |
 
 `/api/analyze` always answers 200 with something usable. With no key, over the cap, or when Claude fails, `source` is `fallback`, `analysis.anchors` is empty, and `warning` says why. `analysis` has `titleSuggestion`, `scale`, `light`, `particles`, `soundLayers`, `lens` and `anchors` (with `x` and `y` already turned into 0 to 1).
+
+Worlds cost money (about 1,580 credits each on `marble-1.1`), so the server caps them at `UNFADE_MAX_WORLDS` (8) a run and never builds the same photo twice (a cache by its hash). A world fails in plain words in `reason` and never stops a memory from showing. `/api/health` adds `worlds` (whether `WORLDLABS_API_KEY` is set), `worldModel` and `worldsLeft`. A studio photo goes to World Labs only when the person ticks the box for it.
 
 ## Interfaces between parts
 
