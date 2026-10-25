@@ -150,10 +150,7 @@ export class MemoryScene {
       this.group.add(marker.group);
     }
 
-    this.intro = makeText('Look at a light to bring it back', { font: FONTS.hand(64, 500), lineHeightM: 0.05, maxChars: 34 });
-    this.intro.position.set(0, -0.42, -1.4);
-    this.intro.material.opacity = 0;
-    this.group.add(this.intro);
+    this.intro = null;
 
     this.vivid = 0;
     this.vividTarget = 0;
@@ -327,11 +324,6 @@ export class MemoryScene {
       pm.uTime.value = t;
       pm.uScale.value = pointScale;
       pm.uOpacity.value = this.fadeIn * (0.25 + 0.75 * vividAll);
-    }
-    if (this.intro) {
-      const shown = t - (this.enteredAt ?? t);
-      this.intro.material.opacity = this.fadeIn * Math.max(0, Math.min(1, shown - 0.8) - Math.max(0, (shown - 6) / 1.5));
-      this.intro.lookAt(headPos);
     }
     if (this.titleCard) {
       const k = t - this.revivedAt;
