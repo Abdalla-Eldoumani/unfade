@@ -1,24 +1,24 @@
 {
   "spec": 1,
   "id": "the-cat",
-  "title": "The cat",
+  "title": "That dinner",
   "when": "",
   "where": "",
   "createdAt": "2026-10-24T06:00:00.000Z",
   "photo": {
     "src": "photo.jpg",
-    "width": 451,
-    "height": 300
+    "width": 900,
+    "height": 1200
   },
   "thumb": {
     "src": "thumb.jpg",
-    "width": 451,
+    "width": 225,
     "height": 300
   },
   "depth": {
     "src": "depth.png",
     "width": 518,
-    "height": 350,
+    "height": 686,
     "encoding": "rg16-disparity"
   },
   "camera": {
@@ -26,47 +26,47 @@
     "focal35mm": null
   },
   "scene": {
-    "scale": "closeup",
+    "scale": "room",
     "light": "warm_indoor",
     "particles": "dust",
     "soundLayers": [
       "room_tone",
-      "birds"
+      "cutlery"
     ]
   },
   "palette": [
-    "#916a4c",
-    "#a58068",
-    "#7a5235",
-    "#b79d94",
-    "#4d2f1a"
+    "#8B6B4A",
+    "#C4956A",
+    "#5C3D24",
+    "#D4A87B",
+    "#3E2714"
   ],
   "anchors": [
     {
       "id": "a1",
-      "x": 0.3814,
-      "y": 0.3867,
-      "label": "the eyes",
-      "question": "What did you call this cat?",
+      "x": 0.5,
+      "y": 0.4,
+      "label": "the table",
+      "question": "Who was sitting across from you?",
       "sound": "none",
       "note": ""
     },
     {
       "id": "a2",
-      "x": 0.5809,
-      "y": 0.81,
-      "label": "the nose",
-      "question": "Where did it like to sleep?",
+      "x": 0.35,
+      "y": 0.65,
+      "label": "the food",
+      "question": "What were you eating that night?",
       "sound": "none",
       "note": ""
     },
     {
       "id": "a3",
-      "x": 0.9202,
-      "y": 0.5,
-      "label": "the room behind",
-      "question": "Who else was home that day?",
-      "sound": "birds",
+      "x": 0.7,
+      "y": 0.25,
+      "label": "the setting",
+      "question": "What was the occasion?",
+      "sound": "none",
       "note": ""
     }
   ],
