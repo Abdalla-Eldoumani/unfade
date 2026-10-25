@@ -132,7 +132,7 @@ export class Worlds {
       display_name: `unfade ${id}`.slice(0, 64),
       model: WORLD_MODEL,
       permission: { public: false },
-      world_prompt: { type: 'image', is_pano: 'false', image_prompt: { source: 'data_base64', data_base64: bytes.toString('base64'), extension: ext } },
+      world_prompt: { type: 'image', is_pano: false, image_prompt: { source: 'data_base64', data_base64: bytes.toString('base64'), extension: ext } },
     });
     let done = op;
     const deadline = Date.now() + DEADLINE_MS;
@@ -190,7 +190,9 @@ async function call(method, route, body) {
   if (res.status === 401 || res.status === 403) throw new Error(`World Labs did not accept the API key (${res.status}).`);
   if (res.status === 402) throw new Error('The World Labs account has run out of credits (402).');
   if (res.status === 429) throw new Error('World Labs has had too many requests for now (429).');
-  if (!res.ok) throw new Error(`World Labs refused the request (${res.status}).`);
+  // 400 and 422 name the field at fault, never the key
+  const detail = (Array.isArray(data.detail) ? data.detail.map((d) => `${(d.loc || []).join('.')}: ${d.msg}`).join('; ') : data.detail || data.message || '').toString().slice(0, 160);
+  if (!res.ok) throw new Error(`World Labs refused the request (${res.status}${detail ? `: ${detail}` : ''}).`);
   return data;
 }
 
