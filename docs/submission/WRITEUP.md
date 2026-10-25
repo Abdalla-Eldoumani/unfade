@@ -39,7 +39,6 @@ Drop in a photo or a short video (a video gives the frame a third of the way in)
 - Abdalla: You can build for a headset without having one in hand. An emulated Quest that plays the whole loop caught most of our bugs before the real headset arrived. A single photo and a depth model give real parallax, as long as the gaps at the edges are hidden well.
 - Primel: Keeping a headset, a phone and a projector in one shared room over WebSockets, and that sound made in the browser can carry a place without a single audio file.
 - Seyar: How Gaussian splat worlds work, and how to line a generated world up with the photo it came from when the service gives no camera position.
-- Dawood: What it takes to make a VR demo clear to someone putting on a headset for the first time.
 
 ## Built with
 
@@ -50,4 +49,3 @@ three.js, WebXR, Meta Quest Browser, onnxruntime-web, Depth Anything V2 Small, t
 - Abdalla Eldoumani: the world (darkroom, memory, shaders, surroundings) and the studio
 - Primel Jayawardana: the thread (server, rooms, guide, start page, sound) and the sample memories
 - Seyar Ghulom Hazrat: generated worlds with World Labs, and the Claude key handling
-- Dawood Shees: testing on the headset and the demo at the table
