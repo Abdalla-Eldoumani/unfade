@@ -91,7 +91,7 @@ export function printMaterial(map, { crop = [1, 1], offset = [0, 0] } = {}) {
 
 // The photo stood up in 3D. Starts faded and blurred; each bloom spreads
 // colour out from an anchor like ink in water. Stretched triangles at depth
-// edges dissolve into the haze behind instead of smearing.
+// edges are cut, showing the haze behind instead of smearing.
 export function memoryMaterial(photo, { aspect, palette }) {
   return new THREE.ShaderMaterial({
     uniforms: {
@@ -133,7 +133,8 @@ export function memoryMaterial(photo, { aspect, palette }) {
         vec3 col = mix(fadedLook(c, uPaper, uCast), c, local);
         col += (hash(vUv * 1024.0 + fract(uTime * 7.0)) - 0.5) * mix(0.06, 0.015, local);
         float border = smoothstep(0.0, 0.05, min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y)));
-        float keep = (1.0 - smoothstep(0.35, 0.85, vEdge)) * border * uFadeIn;
+        // a clean cut at depth edges: a dithered fade there reads as a speckled fringe once the head moves
+        float keep = step(vEdge, 0.5) * border * uFadeIn;
         if (keep < ign(gl_FragCoord.xy)) discard;
         gl_FragColor = vec4(max(col, 0.0), 1.0);
         #include <colorspace_fragment>

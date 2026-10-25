@@ -29,6 +29,8 @@ What you write must stay true to the photo:
 - lens: main unless the photo is clearly a selfie, an ultrawide shot or a zoomed shot.
 - anchors: one to three specific visible things worth remembering, spread apart: a person, an object, a light, a detail in the background. For each give x and y in pixels of this image (origin at the top left), a plain label of at most 4 words ("the candles", "the man on the left", "the window"), and a question.
 - Each question asks the person something only they can know about that thing. Ask, never tell. At most 9 words, second person, plain words, no exclamation marks. Good: "Who lit these candles?", "What was playing outside?", "What were you laughing at?" Bad: "What a wonderful evening!", "Your grandmother baked this cake."
+- Keep every question warm and curious about the good parts of the moment: the people, what they were doing, what they could hear, smell or taste, a small detail. Never ask about loss, death, illness, absence or regret, and never suggest that anyone or anything is gone, even when the photo looks old or a place looks empty.
+- Never assume the person is in the photo, took it, or who they were with, and never assume what a stranger in it was doing with them. Ask openly instead: "Who else was there?", not "Who did you sit here with?". When a photo looks older than the person could be, they were not there: ask about the people in it and that moment ("What was happening just before this?", "Where was this coat from?"), never "you" in the scene, and never what the person remembers of them.
 - sound for an anchor: a layer from the list that this thing makes or sits in, or none.`;
 
 const SCHEMA = {
@@ -62,6 +64,13 @@ const SCHEMA = {
 
 export function hasKey() {
   return Boolean(process.env.ANTHROPIC_API_KEY);
+}
+
+// A paste into a terminal can wrap the key in invisible characters (the
+// bracketed-paste markers, a carriage return): send the key itself and drop
+// whatever surrounds it. Node's error for a bad header quotes the whole value.
+function apiKey() {
+  return /sk-[a-z]+-[A-Za-z0-9_-]+/.exec(process.env.ANTHROPIC_API_KEY || '')?.[0] || '';
 }
 
 // Without Claude: a reasonable scene from simple image statistics the
@@ -116,11 +125,8 @@ function failedStatus(status, detail) {
 }
 
 export async function analyzeWithClaude({ base64, mediaType, width, height, hints = {} }) {
-  // Node trims spaces and line breaks off the ends of a header but refuses any other stray
-  // character (a paste into the terminal can leave one), and its error quotes the whole key
-  if (/[^\x20-\x7e]/.test((process.env.ANTHROPIC_API_KEY || '').replace(/^[\t\n\r ]+|[\t\n\r ]+$/g, ''))) {
-    throw failed('The API key on the server has a stray character in it (set it again where the server runs)');
-  }
+  const key = apiKey();
+  if (!key) throw failed('The API key on the server is not an Anthropic key (it should start with sk-ant)');
   const lines = [`This photo is ${width} by ${height} pixels.`];
   if (hints.title) lines.push(`The person titled it: "${String(hints.title).slice(0, 60)}".`);
   if (hints.when) lines.push(`When, in their words: "${String(hints.when).slice(0, 40)}".`);
@@ -131,7 +137,7 @@ export async function analyzeWithClaude({ base64, mediaType, width, height, hint
     signal: AbortSignal.timeout(TIMEOUT_MS),
     headers: {
       'content-type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY,
+      'x-api-key': key,
       'anthropic-version': '2026-10-21',
     },
     body: JSON.stringify({

@@ -10,6 +10,13 @@ const SEGMENTS = 220;
 const PLATE_SIZE = 160;
 const PLATE_LEAN_M = 0.2;
 const PLATE_STEP = 0.1;
+// Soft depth edges: the cells each way a cell looks across, and per scale the
+// log-depth range there that cuts it. 0.3 cuts about 1% more of a close-up
+// than the per-cell jump alone.
+// shortcut: off for street and landscape, where it cut thin far things (the
+// launch towers) away whole; revisit if a street photo shows streaked edges.
+const WINDOW_CELLS = 1;
+const WINDOW_CUT = { closeup: 0.3, room: 0.3, street: Infinity, landscape: Infinity };
 
 // Turns a photo plus its depth map into a grid of triangles, as if every
 // pixel were pushed out along the ray the camera saw it on. Standing at the
@@ -51,17 +58,40 @@ export function buildDepthMesh(spec, depth, { segments = SEGMENTS } = {}) {
     }
   }
 
+  // The depth model's edges are soft: a step from a cat to the wall behind
+  // spreads over two to four cells, each too small to count as a cliff, and
+  // those cells stretch into streaks. So a cell also counts the log-depth
+  // range across the cells around it (WINDOW_CELLS each way), at a higher bar.
+  const windowCut = WINDOW_CUT[spec.scene.scale];
+  const at = (r, c) => logZ[Math.min(rows, Math.max(0, r)) * (cols + 1) + Math.min(cols, Math.max(0, c))];
+  const around = new Float32Array(cols * rows);
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (let dr = -WINDOW_CELLS; dr <= WINDOW_CELLS + 1; dr++) {
+        for (let dc = -WINDOW_CELLS; dc <= WINDOW_CELLS + 1; dc++) {
+          const z = at(r + dr, c + dc);
+          lo = Math.min(lo, z);
+          hi = Math.max(hi, z);
+        }
+      }
+      around[r * cols + c] = hi - lo;
+    }
+  }
+
   // Unshared vertices, so each triangle carries its own cliff value: the
-  // biggest log-depth jump between its corners. Only triangles stretched
-  // across a gap dissolve, which keeps the holes one cell wide.
+  // biggest log-depth jump between its corners, or the range around its cell.
+  // Only triangles stretched across a gap are cut, which keeps the holes a
+  // cell or two wide; the background plate shows through them.
   const tris = cols * rows * 2;
   const position = new Float32Array(tris * 9);
   const uv = new Float32Array(tris * 6);
   const edge = new Float32Array(tris * 3);
   let t = 0;
-  const addTri = (i0, i1, i2) => {
+  const addTri = (i0, i1, i2, cell) => {
     const jump = Math.max(Math.abs(logZ[i0] - logZ[i1]), Math.abs(logZ[i1] - logZ[i2]), Math.abs(logZ[i0] - logZ[i2]));
-    const e = Math.min(1, Math.max(0, (jump - 0.05) / 0.14));
+    const e = Math.min(1, Math.max(0, (jump - 0.05) / 0.14, (around[cell] - windowCut) / 0.1 + 0.5));
     [i0, i1, i2].forEach((i, k) => {
       const v = t * 3 + k;
       position[v * 3] = gridPos[i * 3];
@@ -78,8 +108,8 @@ export function buildDepthMesh(spec, depth, { segments = SEGMENTS } = {}) {
       const a = r * (cols + 1) + c;
       const b = a + 1;
       const d = a + cols + 1;
-      addTri(a, d, b);
-      addTri(b, d, d + 1);
+      addTri(a, d, b, r * cols + c);
+      addTri(b, d, d + 1, r * cols + c);
     }
   }
 
