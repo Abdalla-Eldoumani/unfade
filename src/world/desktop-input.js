@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 
-const MOVE_RADIUS = 0.6;
+// How far WASD and the wheel can take the eye from where the camera stood:
+// the depth only holds up near that spot (the background plate covers 0.2 m).
+const MOVE_RADIUS = 0.25;
+const DOLLY_M = 0.15;
 const SHAKE_SPEED = 700; // px per second
 const SHAKE_GAP_MS = 70;
 
@@ -33,7 +36,7 @@ export class DesktopInput {
     el.addEventListener('pointerleave', () => (this.pointerInside = false));
     el.addEventListener('wheel', (e) => {
       e.preventDefault();
-      this.dolly = Math.min(0.5, Math.max(-0.5, this.dolly - e.deltaY * 0.0008));
+      this.dolly = Math.min(DOLLY_M, Math.max(-DOLLY_M, this.dolly - e.deltaY * 0.0008));
     }, { passive: false });
     window.addEventListener('keydown', (e) => this.onKey(e, true));
     window.addEventListener('keyup', (e) => this.onKey(e, false));
