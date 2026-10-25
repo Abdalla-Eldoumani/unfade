@@ -496,12 +496,45 @@ label.sound {
   line-height: 1.25;
 }
 
-.world-opt {
+/* An opt-in, so it reads as a sentence with its box, not as a field label;
+   label.world-opt outranks the uppercase label:not(.button) rule above. */
+label.world-opt {
   display: flex;
-  gap: var(--space-2);
   align-items: flex-start;
-  margin-bottom: var(--space-3);
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--line);
+  background: var(--ink-1);
+  font-size: var(--step-1);
+  letter-spacing: 0;
+  text-transform: none;
   line-height: 1.4;
+  color: var(--paper);
+  cursor: pointer;
+}
+
+label.world-opt:has(input:checked) {
+  border-color: rgba(240, 163, 94, 0.5);
+}
+
+.world-opt input {
+  flex: none;
+  width: auto;
+  margin: 3px 0 0;
+  accent-color: var(--safelight);
+}
+
+.world-opt input:focus-visible {
+  outline: 2px solid var(--safelight-glow);
+  outline-offset: 2px;
+}
+
+.world-opt small {
+  display: block;
+  margin-top: var(--space-1);
+  font-size: var(--step-0);
+  color: var(--paper-3);
 }
 
 .world-opt[hidden],
