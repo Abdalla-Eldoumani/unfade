@@ -290,17 +290,17 @@ const ENV_OVERRIDES = {
     night: 0,
   },
   'the-cat': {
-    // warm restaurant interior, amber ceiling lights, dark wood floor
-    top: [0xC4, 0x95, 0x6A, 0.45],
-    mid: [0x8B, 0x6B, 0x4A, 0.35],
-    bot: [0x3E, 0x27, 0x14, 0.25],
+    // coastal cliff at golden hour, warm sunset sky, rocky ground
+    top: [0xE8, 0xB8, 0x8A, 0.50],
+    mid: [0xD4, 0x95, 0x6B, 0.40],
+    bot: [0x5C, 0x6B, 0x4A, 0.25],
     night: 0,
   },
   'launch-night': {
-    // deep twilight sky, golden floodlight horizon, dark concrete pad
-    top: [0x1E, 0x2E, 0x50, 0.40],
-    mid: [0xC8, 0x98, 0x50, 0.20],
-    bot: [0x2A, 0x28, 0x30, 0.15],
+    // clear starry night, milky way, dark rocky terrain
+    top: [0x12, 0x18, 0x30, 0.35],
+    mid: [0x20, 0x1C, 0x28, 0.15],
+    bot: [0x18, 0x14, 0x10, 0.10],
     night: 1,
   },
 };
