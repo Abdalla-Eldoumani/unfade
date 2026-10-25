@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { fileUrl, loadDepth } from '../shared/memories.js';
 import { AnchorMarker } from './anchors.js';
 import { backgroundPlate, buildDepthMesh, plateSize } from './depth-mesh.js';
+import { ENVIRONMENTS, environmentUrl, pickEnvironment } from './environments.js';
 import { makeParticles } from './particles.js';
 import { memoryMaterial, peripheryMaterial } from './shaders.js';
 import { FONTS, disposeMesh, glowMap, makeText } from './text.js';
@@ -47,18 +48,23 @@ export class MemoryScene {
     this.dispose();
     this.item = item;
     const { spec } = item;
-    const [photo, depth, envMap] = await Promise.all([
+    const [photo, depth, surroundings] = await Promise.all([
       loader.loadAsync(fileUrl(item, 'photo')),
       loadDepth(fileUrl(item, 'depth')),
-      loader.loadAsync(item.base + 'env.jpg').catch(() => null),
+      loadSurroundings(item),
     ]);
+    const { map: envMap, yaw: envYaw } = surroundings;
     photo.colorSpace = THREE.SRGBColorSpace;
     photo.anisotropy = this.maxAnisotropy;
     photo.generateMipmaps = true;
     photo.minFilter = THREE.LinearMipmapLinearFilter;
     if (envMap) {
       envMap.colorSpace = THREE.SRGBColorSpace;
-      envMap.minFilter = THREE.LinearFilter;
+      // mips let the shader blur the surroundings near the photo; repeat
+      // closes the seam where the panorama's two ends meet behind the viewer
+      envMap.generateMipmaps = true;
+      envMap.minFilter = THREE.LinearMipmapLinearFilter;
+      envMap.wrapS = THREE.RepeatWrapping;
     }
 
     this.built = buildDepthMesh(spec, depth);
@@ -84,7 +90,7 @@ export class MemoryScene {
         plate.needsUpdate = true;
       };
     }
-    const shared = { tanH, tanV, env, maxDim, aspect, bloom: this.material.uniforms.uBloom, plate, envMap };
+    const shared = { tanH, tanV, env, maxDim, aspect, bloom: this.material.uniforms.uBloom, plate, envMap, envYaw };
     this.periphery = new THREE.Mesh(new THREE.SphereGeometry(60, 48, 24), peripheryMaterial(photo, shared));
     this.periphery.renderOrder = -1;
     this.group.add(this.periphery);
@@ -327,6 +333,17 @@ function envColors(spec) {
     bot: c(palette[4] || palette[2] || '#4d2f1a', 0.18),
     night: 0,
   };
+}
+
+// A sample can bring its own env.jpg; any other memory gets a panorama from
+// the library, picked from its scene. No panorama at all (a failed load)
+// leaves the palette's sky and ground in the shader.
+async function loadSurroundings(item) {
+  const own = item.base?.startsWith('/memories/') ? await loader.loadAsync(item.base + 'env.jpg').catch(() => null) : null;
+  if (own) return { map: own, yaw: 0 };
+  const name = pickEnvironment(item.spec.scene);
+  const map = await loader.loadAsync(environmentUrl(name)).catch(() => null);
+  return { map, yaw: ENVIRONMENTS[name]?.yaw ?? 0 };
 }
 
 function easeOut(x) {
