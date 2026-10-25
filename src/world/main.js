@@ -57,7 +57,7 @@ class World {
     this.audio = createAudio();
     this.hub = new Hub();
     this.stage.scene.add(this.hub.group);
-    this.memory = new MemoryScene({ maxAnisotropy: this.stage.maxAnisotropy });
+    this.memory = new MemoryScene({ maxAnisotropy: this.stage.maxAnisotropy, stage: this.stage });
     this.memory.group.visible = false;
     this.stage.scene.add(this.memory.group);
     this.xr = new XRInput(this.stage);
