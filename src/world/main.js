@@ -31,6 +31,7 @@ const LINE_BELOW_EYES = 0.28; // m, where the line hangs in VR
 // m a laptop can walk (WASD) inside a generated world. A close-up's subject
 // is a front-only shell a hand's width away: past a lean you see its back.
 const WALK_M = { closeup: 0.2, room: 1, street: 1, landscape: 1 };
+const REACH_FADE_M = 0.3; // headset: past WALK_M the view fades to paper over this
 // Stepping in: the print rises to the eye line and grows until its photo is
 // all there is to see, while the paper flash takes over for the last part.
 const RISE_S = 0.8; // s from the hand to filling the view
@@ -458,6 +459,17 @@ class World {
   }
 
   memoryFrame(dt, t, head, pointers, actions) {
+    // In a headset nothing stops the body, so past the reach a generated
+    // world holds up the paper fade closes in, over REACH_FADE_M, before
+    // anyone walks into the unseen back of a front-only thing.
+    if (this.stage.presenting && this.memory.splat && !this.fade.resolve) {
+      const g = this.memory.group.position;
+      const away = Math.hypot(head.position.x - g.x, head.position.z - g.z) - WALK_M[this.memory.spec.scene.scale];
+      const k = Math.min(1, Math.max(0, away / REACH_FADE_M));
+      this.fade.mesh.material.color.set('#f1e9dc');
+      this.fade.mesh.material.opacity = k * 0.92;
+      this.fade.mesh.visible = k > 0.001;
+    }
     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(head.quaternion);
     const rays = [{ origin: head.position.clone(), direction: forward }, ...pointers.map((p) => ({ origin: p.origin, direction: p.direction }))];
     const done = this.memory.update(dt, t, head.position, rays, this.pointScale());
