@@ -94,6 +94,16 @@ export function printMaterial(map, { crop = [1, 1], offset = [0, 0] } = {}) {
 // edges are cut, showing the haze behind instead of smearing.
 export function memoryMaterial(photo, { aspect, palette }) {
   return new THREE.ShaderMaterial({
+    // Drawn with the opaque pass, right after the haze behind it, but blended:
+    // its rim dissolves into that haze, and anything drawn later (lights,
+    // particles, words) still sorts against its depth.
+    transparent: false,
+    blending: THREE.CustomBlending,
+    blendEquation: THREE.AddEquation,
+    blendSrc: THREE.SrcAlphaFactor,
+    blendDst: THREE.OneMinusSrcAlphaFactor,
+    blendSrcAlpha: THREE.OneFactor,
+    blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
     uniforms: {
       uPhoto: { value: photo },
       uVivid: { value: 0 },
@@ -146,26 +156,34 @@ export function memoryMaterial(photo, { aspect, palette }) {
         vec3 c = texture2D(uPhoto, vUv, (1.0 - local) * 2.4 + edgeBlur).rgb;
         vec3 col = mix(fadedLook(c, uPaper, uCast), c, local);
         col += (hash(vUv * 1024.0 + fract(uTime * 7.0)) - 0.5) * mix(0.06, 0.015, local);
-        float border = smoothstep(0.0, 0.05, min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y)));
-        // combine: depth-edge fade, angle fade, border, and master fade
+        // The rim dissolves over a wide, uneven margin with rounded corners,
+        // like the edge of a print left in the sun, so no rectangle shows.
+        vec2 q = abs(vUv - 0.5) * 2.0;
+        float r = pow(pow(q.x, 6.0) + pow(q.y, 6.0), 1.0 / 6.0) + (vnoise(vUv * 7.0) - 0.5) * 0.08;
+        float rim = 1.0 - smoothstep(0.78, 1.0, r);
+        // Depth cliffs and edge-on triangles are cut, not blended: what is
+        // behind them has to show, and a half-clear cliff reads as a ghost.
         float edgeFade = 1.0 - smoothstep(0.3, 0.85, vEdge);
-        float keep = edgeFade * angleFade * border * uFadeIn;
-        if (keep < ign(gl_FragCoord.xy)) discard;
-        gl_FragColor = vec4(max(col, 0.0), 1.0);
+        if (edgeFade * angleFade < ign(gl_FragCoord.xy)) discard;
+        float alpha = rim * uFadeIn;
+        if (alpha < 0.003) discard;
+        gl_FragColor = vec4(max(col, 0.0), alpha);
         #include <colorspace_fragment>
       }
     `,
   });
 }
 
-// Inside of a big sphere: the photo's own colours stretched past its edges,
-// heavily blurred, so the edges of the memory fade into something that
-// belongs to it. Behind the photo it matches the photo's own look (faded or
-// back), so the gaps at depth edges read as soft focus, not cracks.
+// Inside of a big sphere: the world around the photo. A panorama (the
+// memory's own env.jpg, or one from public/environments) or, without one,
+// the palette's sky and ground. Near the photo the world is out of focus,
+// graded toward the photo's colours, and the photo's own edge colours run out
+// into it; further out it sharpens. Behind the photo it matches the photo's
+// own look (faded or back), so the gaps at depth edges read as soft focus.
 // uBloom should be the memory material's own uniform, shared.
 // plate, if given, is the background plate (depth-mesh.js): shown through the
 // gaps instead of the photo once the head moves.
-export function peripheryMaterial(photo, { tanH, tanV, env, maxDim, aspect, bloom, plate = null, envMap = null }) {
+export function peripheryMaterial(photo, { tanH, tanV, env, maxDim, aspect, bloom, plate = null, envMap = null, envYaw = 0 }) {
   const plateDim = plate ? Math.max(plate.image.width, plate.image.height) : 1;
   return new THREE.ShaderMaterial({
     side: THREE.BackSide,
@@ -178,6 +196,10 @@ export function peripheryMaterial(photo, { tanH, tanV, env, maxDim, aspect, bloo
       uLod: { value: Math.max(1, Math.log2(maxDim || 512) - 3.2) },
       uTan: { value: new THREE.Vector2(tanH, tanV) },
       uEnvMap: { value: envMap },
+      uEnvYaw: { value: envYaw },
+      uTop: { value: env?.top ?? new THREE.Color('#3a2c22') },
+      uMid: { value: env?.mid ?? new THREE.Color('#2b1d16') },
+      uBot: { value: env?.bot ?? new THREE.Color('#140d09') },
       uPaper: { value: PAPER.clone() },
       uCast: { value: AGE_CAST.clone() },
       uVivid: { value: 0 },
@@ -199,6 +221,10 @@ export function peripheryMaterial(photo, { tanH, tanV, env, maxDim, aspect, bloo
       uniform sampler2D uPhoto;
       uniform sampler2D uPlate;
       uniform sampler2D uEnvMap;
+      uniform float uEnvYaw;
+      uniform vec3 uTop;
+      uniform vec3 uMid;
+      uniform vec3 uBot;
       uniform float uPlateShift;
       uniform float uLod;
       uniform vec2 uTan;
@@ -213,50 +239,78 @@ export function peripheryMaterial(photo, { tanH, tanV, env, maxDim, aspect, bloo
       ${FADED}
       ${BLOOM}
 
-      // Equirectangular: direction vector → panorama UV
+      // Equirectangular: a direction to panorama UV, turned by uEnvYaw
       vec2 envUV(vec3 dir) {
         float phi = atan(dir.z, dir.x);
         float theta = asin(clamp(dir.y, -1.0, 1.0));
-        return vec2(phi / 6.2831853 + 0.5, theta / 3.1415926 + 0.5);
+        return vec2(phi / 6.2831853 + 0.5 + uEnvYaw, theta / 3.1415926 + 0.5);
+      }
+
+      // An explicit level of detail: blur on demand, and no seam where the
+      // panorama's two ends meet (a derivative-picked level breaks there)
+      vec3 surroundings(vec3 d, float lod) {
+        #if HAS_ENV_MAP
+        return textureLod(uEnvMap, envUV(d), lod).rgb;
+        #else
+        return d.y > 0.0 ? mix(uMid, uTop, smoothstep(0.0, 0.7, d.y)) : mix(uMid, uBot, smoothstep(0.0, -0.5, d.y));
+        #endif
       }
 
       void main() {
         vec3 d = normalize(vDir);
+        float forward = smoothstep(0.0, -0.2, d.z);
+        vec2 p = d.xy / max(0.05, -d.z);
+        vec2 uv = 0.5 + p / (2.0 * uTan);
+        // Distance from the photo in photo half-sizes: 0 at its centre, 1 at
+        // its edge, with rounded corners and an uneven rim.
+        vec2 q = abs(uv - 0.5) * 2.0;
+        float edgeD = pow(pow(q.x, 4.0) + pow(q.y, 4.0), 0.25) + (vnoise(uv * 2.6) - 0.5) * 0.18;
+        edgeD = mix(4.0, edgeD, forward);
+        float near = 1.0 - smoothstep(0.9, 2.6, edgeD);
 
-        // Sample the 360° panorama
-        vec3 env = texture2D(uEnvMap, envUV(d)).rgb;
+        vec3 world = surroundings(d, mix(0.0, 6.5, near));
+        #if HAS_ENV_MAP
+        vec3 worldMean = textureLod(uEnvMap, vec2(0.5), 20.0).rgb;
+        #else
+        vec3 worldMean = uMid;
+        #endif
+        // Match the photo's brightness, and only some of its colour cast, so
+        // a bright room stays a room and does not turn the colour of the cup.
+        // Near the photo the match is against what sits right behind it, so
+        // a lit street does not glow around a dark night photo.
+        vec3 photoMean = textureLod(uPhoto, vec2(0.5), 20.0).rgb;
+        vec3 worldAhead = surroundings(vec3(0.0, 0.0, -1.0), 7.0);
+        worldMean = mix(worldMean, worldAhead, near);
+        float lumP = max(dot(photoMean, vec3(0.2126, 0.7152, 0.0722)), 0.02);
+        float lumW = max(dot(worldMean, vec3(0.2126, 0.7152, 0.0722)), 0.02);
+        vec3 tint = (photoMean / lumP) / max(worldMean / lumW, vec3(0.05));
+        vec3 grade = clamp(vec3(lumP / lumW) * mix(vec3(1.0), tint, 0.3), vec3(0.15), vec3(2.0));
+        world *= mix(vec3(1.0), grade, 0.45 + 0.4 * near);
 
-        vec3 col = env;
+        vec3 col = world;
         float inside = 0.0;
         float local = uVivid;
         #if HAZE_DETAIL > 0
         // Photo projection: forward rays use the real projection, sides and
         // rear clamp to the nearest edge at heavy blur
-        vec2 p = d.xy / max(0.05, -d.z);
-        vec2 uv = 0.5 + p / (2.0 * uTan);
         vec2 outside = max(abs(uv - 0.5) - 0.5, 0.0) * 2.0 * uTan;
         inside = 1.0 - clamp(length(outside) * 3.0, 0.0, 1.0);
-        float forward = smoothstep(0.0, -0.2, d.z);
-        // Feather: start blending to panorama well before the photo edge
-        // to eliminate the visible rectangle. edgeD = 0 at center, 1 at edge.
-        float edgeD = max(abs(uv.x - 0.5), abs(uv.y - 0.5)) * 2.0;
-        float w = (1.0 - smoothstep(0.6, 1.1, edgeD)) * forward;
         float lean = smoothstep(0.03, 0.2, vLean);
-        // Extra blur at photo edges: the blurrier the photo is at the
-        // transition, the less visible the boundary
-        float edgeBlur = smoothstep(0.45, 0.95, edgeD) * 4.0;
+        float edgeBlur = smoothstep(0.45, 1.0, edgeD) * 4.0;
         float lod = mix(uLod + 2.0, mix(2.5, uLod, GAP_BLUR * lean), inside * forward) + edgeBlur;
         vec3 c = textureLod(uPhoto, clamp(uv, 0.0, 1.0), lod).rgb;
         #if GAP_FILL
         vec3 behind = textureLod(uPlate, clamp(uv, 0.0, 1.0), max(0.0, lod - uPlateShift)).rgb;
         c = mix(c, behind, inside * lean * forward);
         #endif
-        // Tint the panorama toward the photo's blurred edge colours in
-        // the transition zone, so the colour gradient is continuous
+        // the photo's edge colours run out into the haze before the world takes over
         vec3 photoEdge = textureLod(uPhoto, clamp(uv, 0.0, 1.0), uLod + 3.0).rgb;
-        float tintZone = (1.0 - smoothstep(0.75, 1.4, edgeD)) * forward;
-        vec3 tintedEnv = mix(env, photoEdge * 0.85, tintZone * 0.55);
-        col = mix(tintedEnv, c, w);
+        vec3 haze = mix(world, photoEdge, (1.0 - smoothstep(0.85, 1.7, edgeD)) * 0.45 * forward);
+        // the blurred copy ends where the photo's own rim ends, so no band
+        // of it is left standing around the photo
+        float w = (1.0 - smoothstep(0.75, 1.05, edgeD)) * forward;
+        col = mix(haze, c, w);
+        inside = w;
         #if HAZE_DETAIL > 1
         local = mix(uVivid, bloomAt(clamp(uv, 0.0, 1.0), uCore), inside * forward);
         #else
