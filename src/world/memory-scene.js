@@ -47,14 +47,19 @@ export class MemoryScene {
     this.dispose();
     this.item = item;
     const { spec } = item;
-    const [photo, depth] = await Promise.all([
+    const [photo, depth, envMap] = await Promise.all([
       loader.loadAsync(fileUrl(item, 'photo')),
       loadDepth(fileUrl(item, 'depth')),
+      loader.loadAsync(item.base + 'env.jpg').catch(() => null),
     ]);
     photo.colorSpace = THREE.SRGBColorSpace;
     photo.anisotropy = this.maxAnisotropy;
     photo.generateMipmaps = true;
     photo.minFilter = THREE.LinearMipmapLinearFilter;
+    if (envMap) {
+      envMap.colorSpace = THREE.SRGBColorSpace;
+      envMap.minFilter = THREE.LinearFilter;
+    }
 
     this.built = buildDepthMesh(spec, depth);
     const { geometry, tanH, tanV, aspect } = this.built;
@@ -64,11 +69,7 @@ export class MemoryScene {
     this.mesh.frustumCulled = false;
     this.group.add(this.mesh);
 
-    // average every palette colour so the haze behind the photo feels warm,
-    // not nearly black (the old last-colour pick was #1b1009 for the-cat)
-    const base = new THREE.Color(0, 0, 0);
-    for (const hex of spec.palette) base.add(new THREE.Color(hex));
-    base.multiplyScalar(0.4 / Math.max(1, spec.palette.length));
+    const env = envColors(spec);
     const maxDim = Math.max(spec.photo.width, spec.photo.height);
     let plate = null;
     if (GAP_FILL) {
@@ -83,7 +84,7 @@ export class MemoryScene {
         plate.needsUpdate = true;
       };
     }
-    const shared = { tanH, tanV, base, maxDim, aspect, bloom: this.material.uniforms.uBloom, plate };
+    const shared = { tanH, tanV, env, maxDim, aspect, bloom: this.material.uniforms.uBloom, plate, envMap };
     this.periphery = new THREE.Mesh(new THREE.SphereGeometry(60, 48, 24), peripheryMaterial(photo, shared));
     this.periphery.renderOrder = -1;
     this.group.add(this.periphery);
@@ -274,6 +275,58 @@ export class MemoryScene {
     this.item = null;
     this.platePending = null;
   }
+}
+
+// Scene-aware environment colours for the periphery sphere: top (ceiling/sky),
+// mid (walls/horizon), bot (floor/ground), and whether to draw stars.
+// Hand-tuned environments for the sample memories, picked from the actual
+// photos. The shader multiplies these for floor/wall/ceiling detail.
+const ENV_OVERRIDES = {
+  'morning-coffee': {
+    // dark oak café table, warm brown walls, amber overhead lamp
+    top: [0xD4, 0xA8, 0x6B, 0.50],
+    mid: [0x8B, 0x68, 0x40, 0.40],
+    bot: [0x5C, 0x3A, 0x22, 0.35],
+    night: 0,
+  },
+  'the-cat': {
+    // warm restaurant interior, amber ceiling lights, dark wood floor
+    top: [0xC4, 0x95, 0x6A, 0.45],
+    mid: [0x8B, 0x6B, 0x4A, 0.35],
+    bot: [0x3E, 0x27, 0x14, 0.25],
+    night: 0,
+  },
+  'launch-night': {
+    // deep twilight sky, golden floodlight horizon, dark concrete pad
+    top: [0x1E, 0x2E, 0x50, 0.40],
+    mid: [0xC8, 0x98, 0x50, 0.20],
+    bot: [0x2A, 0x28, 0x30, 0.15],
+    night: 1,
+  },
+};
+
+function envColors(spec) {
+  const c = (hex, s) => new THREE.Color(hex).multiplyScalar(s);
+  const fromArr = ([r, g, b, s]) => new THREE.Color(r / 255, g / 255, b / 255).multiplyScalar(s);
+  const ov = ENV_OVERRIDES[spec.id];
+  if (ov) return { top: fromArr(ov.top), mid: fromArr(ov.mid), bot: fromArr(ov.bot), night: ov.night };
+  // fallback for unknown memories: derive from palette and light
+  const { light } = spec.scene;
+  const palette = spec.palette;
+  if (light === 'night') {
+    return {
+      top: c(palette[1] || '#1b2335', 0.35),
+      mid: c(palette[4] || '#b89b6e', 0.2),
+      bot: c(palette[0] || '#2b364f', 0.1),
+      night: 1,
+    };
+  }
+  return {
+    top: c(palette[1] || '#c77f4b', 0.45),
+    mid: c(palette[0] || '#916a4c', 0.3),
+    bot: c(palette[4] || palette[2] || '#4d2f1a', 0.18),
+    night: 0,
+  };
 }
 
 function easeOut(x) {
