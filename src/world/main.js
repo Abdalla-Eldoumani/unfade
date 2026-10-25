@@ -632,7 +632,7 @@ class World {
       }
     } else {
       const p = this.memory.progress();
-      hint = this.memory.revived ? 'It is back.' : `Look at the lights to bring it back · ${p.bloomed} of ${p.total}`;
+      hint = this.memory.revived ? 'It is back.' : `Look at a light to bring it back · ${p.bloomed} of ${p.total}`;
       buttons.push({ label: 'Back to the darkroom', kind: 'ghost', onClick: () => this.leaveMemory() });
     }
     if (IS_PHONE && !this.desk.motion && !this.stage.presenting) {
