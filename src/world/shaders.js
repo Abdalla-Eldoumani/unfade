@@ -173,7 +173,12 @@ export function memoryMaterial(photo, { aspect, palette }) {
         // Depth cliffs and edge-on triangles are cut, not blended: what is
         // behind them has to show, and a half-clear cliff reads as a ghost.
         float edgeFade = 1.0 - smoothstep(0.3, 0.85, vEdge);
-        if (edgeFade * angleFade < ign(gl_FragCoord.xy)) discard;
+        // From the centre (a laptop, the mirror) every triangle covers only
+        // its own pixels, so nothing needs cutting; the cuts come in as the
+        // eye moves off it (a headset eye sits 3 cm off), before a cliff can
+        // be seen from the side.
+        float offCentre = smoothstep(0.004, 0.025, vLean);
+        if (edgeFade * angleFade < ign(gl_FragCoord.xy) * offCentre) discard;
         float alpha = rim * uFadeIn;
         if (alpha < 0.003) discard;
         gl_FragColor = vec4(max(col, 0.0), alpha);
