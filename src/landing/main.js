@@ -62,7 +62,8 @@ function headsetUrls(lan) {
 
 async function start() {
   const [h, items] = await Promise.all([health(), listMemories().catch(() => [])]);
-  const frames = [...document.querySelectorAll('.frame-img')];
+  // the fourth frame keeps its still of the projector view
+  const frames = [...document.querySelectorAll('.frame-img')].slice(0, 3);
   items.slice(0, frames.length).forEach((item, i) => {
     frames[i].style.backgroundImage = `url("${fileUrl(item, 'thumb')}")`;
   });
