@@ -7,7 +7,6 @@ import { makeParticles } from './particles.js';
 import { memoryMaterial, peripheryMaterial } from './shaders.js';
 import { FONTS, disposeMesh, glowMap, makeText } from './text.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { WorldSplat, findPhotoView } from './world-splat.js';
 
 const BLOOM_S = 2.2;
 const BLOOM_RADIUS = 0.45;
@@ -111,8 +110,12 @@ export class MemoryScene {
     // holds the photo's view and everything around it. If it fails to load,
     // the sheet and haze stay, so there is never nothing to see.
     if (spec.world && this.stage) {
-      const splat = new WorldSplat();
+      let splat = null;
       try {
+        // the splat renderer is a large download, so only a memory with a
+        // generated world fetches it; the darkroom loads without it
+        const { WorldSplat, findPhotoView } = await import('./world-splat.js');
+        splat = new WorldSplat();
         const view = spec.world.pano ? await findPhotoView(spec.world, photo.image, tanH, tanV) : { yaw: 0, pitch: 0 };
         const mesh = await splat.load(spec.world, { stage: this.stage, xr: this.stage.renderer.xr.isPresenting, view });
         // the photo looks this far up (+) or down (-) inside its world
@@ -127,7 +130,7 @@ export class MemoryScene {
         } else splat.dispose();
       } catch (err) {
         console.warn('the world did not load; showing the photo instead:', err.message);
-        splat.dispose();
+        splat?.dispose();
       }
     }
 
