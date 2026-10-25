@@ -146,9 +146,10 @@ export async function analyzeWithClaude({ base64, mediaType, width, height, hint
       ],
     }),
   }).catch((err) => {
-    throw err.name === 'TimeoutError'
-      ? failed(`Claude took longer than ${TIMEOUT_MS / 1000} seconds to answer`)
-      : failed(`Claude could not be reached from this laptop (${err.cause?.code || err.message})`);
+    if (err.name === 'TimeoutError') throw failed(`Claude took longer than ${TIMEOUT_MS / 1000} seconds to answer`);
+    // Node refuses a key holding a control character (a paste into the terminal can leave one) before sending anything
+    if (/x-api-key/.test(err.cause?.message)) throw failed('The API key on the server has a character in it that cannot be sent (set it again where the server runs)');
+    throw failed(`Claude could not be reached from this laptop (${err.cause?.code || err.message})`);
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw failedStatus(res.status, body?.error?.message || 'no details');
