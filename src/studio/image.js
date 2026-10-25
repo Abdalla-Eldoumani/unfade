@@ -126,3 +126,29 @@ function exifFocal(buf, tiff) {
   const v = u16(f + 8);
   return v > 0 && v < 1000 ? v : null;
 }
+
+// A video becomes the frame a third of the way in; the studio works from one still.
+export async function videoFrame(file) {
+  const url = URL.createObjectURL(file);
+  const v = document.createElement('video');
+  v.muted = true;
+  v.playsInline = true;
+  v.preload = 'auto';
+  v.src = url;
+  const wait = (event, ms) => new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`"${file.name}" could not be opened as a video here. Try a photo instead.`)), ms);
+    v.addEventListener(event, () => { clearTimeout(t); resolve(); }, { once: true });
+    v.addEventListener('error', () => { clearTimeout(t); reject(new Error(`"${file.name}" could not be opened as a video here. Try a photo instead.`)); }, { once: true });
+  });
+  try {
+    await wait('loadeddata', 15000);
+    const d = Number.isFinite(v.duration) ? v.duration : 0;
+    if (d > 0.1) {
+      v.currentTime = d / 3;
+      await wait('seeked', 15000);
+    }
+    return await createImageBitmap(v);
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}

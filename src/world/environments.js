@@ -27,7 +27,9 @@ const OUTDOOR_SOUNDS = ['waves', 'birds', 'stream', 'crickets', 'city', 'night_a
 
 // Every field here is one the person can change in the studio, so changing
 // the light or the sounds there changes the surroundings too.
-export function pickEnvironment({ scale, light, particles, soundLayers = [] } = {}) {
+export function pickEnvironment({ place, scale, light, particles, soundLayers = [] } = {}) {
+  if (place === 'own') return null;
+  if (ENVIRONMENTS[place]) return place;
   const sounds = new Set(soundLayers);
   if (particles === 'snow') return 'snowy_park_01';
   if (particles === 'confetti') return 'ballroom';

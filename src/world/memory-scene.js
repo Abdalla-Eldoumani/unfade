@@ -444,6 +444,7 @@ async function loadSurroundings(item) {
   const own = item.base?.startsWith('/memories/') ? await loader.loadAsync(item.base + 'env.jpg').catch(() => null) : null;
   if (own) return { map: own, yaw: 0 };
   const name = pickEnvironment(item.spec.scene);
+  if (!name) return { map: null, yaw: 0 };
   const map = await loader.loadAsync(environmentUrl(name)).catch(() => null);
   return { map, yaw: ENVIRONMENTS[name]?.yaw ?? 0 };
 }
