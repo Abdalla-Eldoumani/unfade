@@ -1,8 +1,10 @@
 import '../shared/tokens.css';
 import './landing.css';
 import { applyBrand } from '../shared/brand.js';
+import { SOUND_LAYERS } from '../shared/contract.js';
 import { fileUrl, listMemories } from '../shared/memories.js';
 import { sanitizeRoom } from '../shared/room.js';
+import { createAudio, ONE_SHOTS } from '../sound/soundscape.js';
 
 applyBrand();
 const $ = (s) => document.querySelector(s);
@@ -42,13 +44,20 @@ async function health() {
   }
 }
 
-function headsetUrls(lan) {
+function lanBase(lan) {
   const local = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
-  const room = sanitizeRoom(roomInput.value);
-  const tail = `/world.html${room !== 'demo' ? `?room=${room}` : ''}`;
-  if (!local) return [`${location.origin}${tail}`];
+  if (!local) return [location.origin];
   const port = location.port ? `:${location.port}` : '';
-  return (lan || []).map((ip) => `${location.protocol}//${ip}${port}${tail}`);
+  return (lan || []).map((ip) => `${location.protocol}//${ip}${port}`);
+}
+
+function roomTail(path) {
+  const room = sanitizeRoom(roomInput.value);
+  return `${path}${room !== 'demo' ? `?room=${room}` : ''}`;
+}
+
+function headsetUrls(lan) {
+  return lanBase(lan).map((base) => `${base}${roomTail('/world.html')}`);
 }
 
 async function start() {
@@ -75,12 +84,35 @@ async function start() {
     }
     // keep the scheme: typed without it, a browser may try http://, which the TLS port refuses
     el.replaceChildren(...urls.map((u) => Object.assign(document.createElement('span'), { textContent: u })));
+    const bases = lanBase(h?.lan);
+    const mirrorEl = $('.mirror-url');
+    const guideEl = $('.guide-url');
+    if (bases.length) {
+      const roomQ = sanitizeRoom(roomInput.value) !== 'demo' ? `?room=${sanitizeRoom(roomInput.value)}&mirror` : '?mirror';
+      mirrorEl.textContent = `${bases[0]}/world.html${roomQ}`;
+      guideEl.textContent = `${bases[0]}${roomTail('/guide.html')}`;
+    }
     if (location.protocol !== 'https:') {
       $('.how-small').textContent = 'This page is on plain HTTP, and the headset needs HTTPS. Run npm run cert, then start again.';
     }
   };
   roomInput.addEventListener('input', showUrls);
   showUrls();
+
+  // Poll server health so the person at the table knows when it drops or comes back.
+  let wasUp = Boolean(h);
+  setInterval(async () => {
+    const now = await health();
+    const isUp = Boolean(now);
+    if (isUp === wasUp) return;
+    wasUp = isUp;
+    if (!isUp) {
+      line.textContent = 'Server not reachable';
+    } else {
+      const claude = now.claude ? `Claude on (${now.model}, ${now.analysesLeft} left)` : 'Claude off, questions come from the fallback';
+      line.textContent = `Server back · ${claude}`;
+    }
+  }, 10000);
 }
 
 function readRoom() {
@@ -100,3 +132,128 @@ function saveRoom(room) {
 }
 
 start();
+
+if (params.has('sounds')) buildSoundsPanel();
+
+function buildSoundsPanel() {
+  const audio = createAudio();
+  const active = new Map();
+
+  const panel = document.createElement('section');
+  panel.className = 'sounds-panel';
+
+  const heading = document.createElement('h2');
+  heading.textContent = 'Sound check';
+  panel.append(heading);
+
+  const unlock = document.createElement('button');
+  unlock.textContent = 'Unlock audio';
+  unlock.addEventListener('click', () => {
+    audio.unlock();
+    unlock.textContent = 'Audio unlocked';
+    unlock.disabled = true;
+  });
+  panel.append(unlock);
+
+  // Ambience layers
+  const layerLabel = document.createElement('p');
+  layerLabel.className = 'edge';
+  layerLabel.textContent = 'Ambience layers';
+  panel.append(layerLabel);
+
+  const layerGrid = document.createElement('div');
+  layerGrid.className = 'sounds-grid';
+  for (const name of SOUND_LAYERS) {
+    const btn = document.createElement('button');
+    btn.className = 'ghost';
+    btn.textContent = name.replace('_', ' ');
+    btn.addEventListener('click', () => {
+      if (active.has(name)) {
+        active.get(name).stop();
+        active.delete(name);
+        btn.classList.remove('is-playing');
+      } else {
+        const handle = audio.ambience([name]);
+        active.set(name, handle);
+        btn.classList.add('is-playing');
+      }
+    });
+    layerGrid.append(btn);
+  }
+  panel.append(layerGrid);
+
+  // One-shots
+  const shotLabel = document.createElement('p');
+  shotLabel.className = 'edge';
+  shotLabel.textContent = 'One-shots';
+  panel.append(shotLabel);
+
+  const shotGrid = document.createElement('div');
+  shotGrid.className = 'sounds-grid';
+  for (const name of ONE_SHOTS) {
+    const btn = document.createElement('button');
+    btn.className = 'ghost';
+    btn.textContent = name;
+    btn.addEventListener('click', () => audio.oneShot(name));
+    shotGrid.append(btn);
+  }
+  panel.append(shotGrid);
+
+  // Vivid slider for testing the muffled-to-open filter
+  const vividLabel = document.createElement('p');
+  vividLabel.className = 'edge';
+  vividLabel.textContent = 'Scene vivid test';
+  panel.append(vividLabel);
+
+  let sceneHandle = null;
+  const sceneRow = document.createElement('div');
+  sceneRow.className = 'sounds-grid';
+  const sceneBtn = document.createElement('button');
+  sceneBtn.className = 'ghost';
+  sceneBtn.textContent = 'Start scene (room tone)';
+  sceneBtn.addEventListener('click', () => {
+    if (sceneHandle) {
+      sceneHandle.stop();
+      sceneHandle = null;
+      sceneBtn.textContent = 'Start scene (room tone)';
+      sceneBtn.classList.remove('is-playing');
+    } else {
+      sceneHandle = audio.scene(['room_tone']);
+      sceneBtn.textContent = 'Stop scene';
+      sceneBtn.classList.add('is-playing');
+    }
+  });
+  sceneRow.append(sceneBtn);
+
+  const slider = document.createElement('input');
+  slider.type = 'range';
+  slider.min = '0';
+  slider.max = '1';
+  slider.step = '0.05';
+  slider.value = '0';
+  slider.addEventListener('input', () => {
+    if (sceneHandle) sceneHandle.setVivid(Number(slider.value));
+  });
+  sceneRow.append(slider);
+  panel.append(sceneRow);
+
+  // Stop all
+  const stopAll = document.createElement('button');
+  stopAll.textContent = 'Stop all';
+  stopAll.addEventListener('click', () => {
+    for (const [name, handle] of active) {
+      handle.stop();
+      active.delete(name);
+    }
+    if (sceneHandle) {
+      sceneHandle.stop();
+      sceneHandle = null;
+      sceneBtn.textContent = 'Start scene (room tone)';
+      sceneBtn.classList.remove('is-playing');
+    }
+    for (const btn of panel.querySelectorAll('.is-playing')) btn.classList.remove('is-playing');
+  });
+  panel.append(stopAll);
+
+  document.querySelector('.landing').append(panel);
+}

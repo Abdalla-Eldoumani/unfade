@@ -27,14 +27,16 @@ const ui = {
 let items = new Map();
 let room;
 let current = null;
+let lastInsideId = null;
 
 async function start() {
   for (const item of await listMemories()) items.set(item.spec.id, item);
   room = await joinRoom({ name: params.get('name') || 'guide', role: 'guide' });
   ui.form.author.value = localStorageGet('unfade-guide-name') || '';
-  for (const type of [MSG.PEER_JOIN, MSG.PEER_LEAVE, MSG.ANCHOR_BLOOM, MSG.NOTE_ADD, MSG.MEMORY_RESET, 'state', 'status']) {
+  for (const type of [MSG.PEER_JOIN, MSG.PEER_LEAVE, MSG.ANCHOR_BLOOM, MSG.NOTE_ADD, MSG.MEMORY_RESET, 'state']) {
     room.on(type, () => render());
   }
+  room.on('status', (msg) => renderStatus(msg));
   room.on(MSG.MEMORY_ADDED, (msg) => {
     items.set(msg.data.spec.id, msg.data);
     render();
@@ -48,8 +50,23 @@ function headsetPeer() {
   return focusPeer(room.peers);
 }
 
+function renderStatus(msg) {
+  if (room.kind === 'local') {
+    ui.status.textContent = `room ${room.room} · this device only · reload after the server is back`;
+    ui.status.classList.add('is-offline');
+    return;
+  }
+  if (msg && !msg.connected) {
+    ui.status.textContent = `room ${room.room} · server lost, reconnecting`;
+    ui.status.classList.add('is-offline');
+    return;
+  }
+  ui.status.textContent = `room ${room.room} · live`;
+  ui.status.classList.remove('is-offline');
+}
+
 function render() {
-  ui.status.textContent = `room ${room.room} · ${room.kind === 'ws' ? 'live' : 'this device only'}`;
+  renderStatus(null);
   ui.peers.replaceChildren(
     ...[...room.peers.values()].map((p) => li(`${p.name || 'someone'} · ${p.role}`)),
     li(`you · guide`),
@@ -72,10 +89,34 @@ function render() {
   renderNow(true);
 }
 
+function showSummary(memoryId) {
+  const summaryEl = $('.visit-summary');
+  const item = items.get(memoryId);
+  if (!item) { summaryEl.hidden = true; return; }
+  const anchors = item.spec.anchors.length ? item.spec.anchors : [{ id: 'center' }];
+  const bloomed = room.state.blooms[memoryId] || [];
+  const back = anchors.filter((a) => bloomed.includes(a.id)).length;
+  const notes = room.state.notes[memoryId] || [];
+  const parts = [`${escapeHtml(item.spec.title)}: ${back} of ${anchors.length} spot${anchors.length === 1 ? '' : 's'} back`];
+  if (notes.length) parts.push(`${notes.length} note${notes.length === 1 ? '' : 's'} added`);
+  if (notes.length) {
+    const quoted = notes.slice(-2).map((n) => `"${escapeHtml(n.text)}" — ${escapeHtml(n.author)}`).join('<br>');
+    summaryEl.innerHTML = `<p>${parts.join('. ')}.</p><p class="said">${quoted}</p>`;
+  } else {
+    summaryEl.innerHTML = `<p>${parts.join('. ')}.</p>`;
+  }
+  summaryEl.hidden = false;
+}
+
 function renderNow(force = false) {
   const peer = headsetPeer();
   const p = peer?.presence;
-  const id = p?.space === 'memory' ? p.memoryId : p?.held?.memoryId || null;
+  const insideId = p?.space === 'memory' ? p.memoryId : null;
+  // Detect leaving a memory: was inside, now not
+  if (lastInsideId && !insideId) showSummary(lastInsideId);
+  else if (insideId && insideId !== lastInsideId) $('.visit-summary').hidden = true;
+  lastInsideId = insideId;
+  const id = insideId || p?.held?.memoryId || null;
   current = (id && items.get(id)) || null;
   if (!peer) ui.where.textContent = 'Waiting for the headset';
   else if (p.space === 'memory') ui.where.textContent = `${peer.name || 'The headset'} is inside`;
@@ -145,6 +186,7 @@ let resetArmed = 0;
 ui.reset.addEventListener('click', () => {
   if (Date.now() - resetArmed < 3000) {
     room.send(MSG.MEMORY_RESET, { memoryId: null });
+    $('.visit-summary').hidden = true;
     ui.reset.textContent = 'Reset for the next visitor';
     resetArmed = 0;
     return;

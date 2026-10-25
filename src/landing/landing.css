@@ -151,8 +151,20 @@ body {
   display: grid;
   gap: var(--space-1);
   margin: 0;
-  font: 500 var(--step-3) / 1.25 var(--font-mono);
+  font: 500 var(--step-5) / 1.15 var(--font-mono);
   color: var(--paper);
+  overflow-wrap: anywhere;
+}
+
+.addr-label {
+  margin: var(--space-5) 0 var(--space-1);
+}
+
+.mirror-url,
+.guide-url {
+  margin: 0;
+  font: 500 var(--step-4) / 1.25 var(--font-mono);
+  color: var(--paper-2);
   overflow-wrap: anywhere;
 }
 
@@ -184,6 +196,48 @@ body {
   margin: 0;
 }
 
+/* ?sounds diagnostic panel */
+.sounds-panel {
+  margin-top: var(--space-7);
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--line);
+}
+
+.sounds-panel h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: var(--step-4);
+  margin: 0 0 var(--space-4);
+}
+
+.sounds-panel > .edge {
+  display: block;
+  margin: var(--space-5) 0 var(--space-2);
+}
+
+.sounds-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.sounds-grid button.is-playing {
+  color: var(--ink-0);
+  background: var(--ember);
+  border-color: var(--ember);
+}
+
+.sounds-grid input[type='range'] {
+  flex: 1;
+  min-width: 120px;
+  accent-color: var(--ember);
+}
+
+.sounds-panel > button {
+  margin-top: var(--space-5);
+}
+
 @media (max-width: 760px) {
   .landing {
     padding: var(--space-6) var(--space-4) var(--space-8);
@@ -213,6 +267,10 @@ body {
     gap: var(--space-5);
   }
   .headset-url {
+    font-size: var(--step-3);
+  }
+  .mirror-url,
+  .guide-url {
     font-size: var(--step-2);
   }
 }
