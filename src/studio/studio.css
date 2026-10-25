@@ -163,6 +163,11 @@ a {
   background: rgba(240, 163, 94, 0.12);
 }
 
+.print-title:focus-visible {
+  outline: 2px solid var(--safelight-glow);
+  outline-offset: 2px;
+}
+
 .print-tools {
   display: flex;
   gap: var(--space-3);
@@ -182,6 +187,11 @@ a {
 .print-drop:focus-within {
   outline: 2px solid var(--safelight-glow);
   outline-offset: 2px;
+}
+
+/* inside, since .print-window clips anything outside it */
+.print-drop:focus-within {
+  outline-offset: -6px;
 }
 
 .anchors {
