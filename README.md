@@ -85,7 +85,7 @@ export ANTHROPIC_API_KEY="your key"     # this terminal only
 npm start
 ```
 
-On Windows, `setx ANTHROPIC_API_KEY "your key"` stores it for new terminals. Without a key the studio still works: you place the spots yourself and each one asks "What do you remember here?". The server caps analyses at 150 per run and 6 per minute (`UNFADE_MAX_ANALYSES` changes the first), and remembers answers for photos it has already seen. `UNFADE_MODEL` picks the model, `claude-sonnet-5-5` by default.
+Set it with `export` in the one Git Bash window that runs the server, and never start Claude Code from that window. Without a key the studio still works: you place the spots yourself and each one asks "What do you remember here?". The server caps analyses at 150 per run and 6 per minute (`UNFADE_MAX_ANALYSES` changes the first), and remembers answers for photos it has already seen. `UNFADE_MODEL` picks the model, `claude-sonnet-5-5` by default.
 
 ## Using it
 
