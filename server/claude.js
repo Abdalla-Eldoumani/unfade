@@ -64,6 +64,13 @@ export function hasKey() {
   return Boolean(process.env.ANTHROPIC_API_KEY);
 }
 
+// A paste into a terminal can wrap the key in invisible characters (the
+// bracketed-paste markers, a carriage return): send the key itself and drop
+// whatever surrounds it. Node's error for a bad header quotes the whole value.
+function apiKey() {
+  return /sk-[a-z]+-[A-Za-z0-9_-]+/.exec(process.env.ANTHROPIC_API_KEY || '')?.[0] || '';
+}
+
 // Without Claude: a reasonable scene from simple image statistics the
 // studio sends along. No anchors; the studio lets the person place them.
 export function fallbackAnalysis(stats = {}) {
@@ -116,11 +123,8 @@ function failedStatus(status, detail) {
 }
 
 export async function analyzeWithClaude({ base64, mediaType, width, height, hints = {} }) {
-  // Node trims spaces and line breaks off the ends of a header but refuses any other stray
-  // character (a paste into the terminal can leave one), and its error quotes the whole key
-  if (/[^\x20-\x7e]/.test((process.env.ANTHROPIC_API_KEY || '').replace(/^[\t\n\r ]+|[\t\n\r ]+$/g, ''))) {
-    throw failed('The API key on the server has a stray character in it (set it again where the server runs)');
-  }
+  const key = apiKey();
+  if (!key) throw failed('The API key on the server is not an Anthropic key (it should start with sk-ant)');
   const lines = [`This photo is ${width} by ${height} pixels.`];
   if (hints.title) lines.push(`The person titled it: "${String(hints.title).slice(0, 60)}".`);
   if (hints.when) lines.push(`When, in their words: "${String(hints.when).slice(0, 40)}".`);
@@ -131,7 +135,7 @@ export async function analyzeWithClaude({ base64, mediaType, width, height, hint
     signal: AbortSignal.timeout(TIMEOUT_MS),
     headers: {
       'content-type': 'application/json',
-      'x-api-key': process.env.ANTHROPIC_API_KEY,
+      'x-api-key': key,
       'anthropic-version': '2026-10-21',
     },
     body: JSON.stringify({
