@@ -34,6 +34,8 @@ export async function checkClaudeRequest() {
     };
     await failure(async () => new Response(JSON.stringify({ error: { message: 'invalid x-api-key' } }), { status: 401 }), 'did not accept the API key', 'a wrong key');
     await failure(async () => { throw new TypeError('fetch failed'); }, 'could not be reached', 'no network');
+    const refused = Object.assign(new Error('invalid x-api-key header'), { code: 'UND_ERR_INVALID_ARG' });
+    await failure(async () => { throw new TypeError('fetch failed', { cause: refused }); }, 'has a character in it', 'a stray character in the key');
     return problems;
   } finally {
     globalThis.fetch = realFetch;
