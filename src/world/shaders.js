@@ -150,7 +150,9 @@ export function memoryMaterial(photo, { aspect, palette }) {
 // uBloom should be the memory material's own uniform, shared.
 // plate, if given, is the background plate (depth-mesh.js): shown through the
 // gaps instead of the photo once the head moves.
-export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, bloom, plate = null }) {
+// env: { floor, sky, outdoor } colours of the place around the photo (a
+// floor below, a ceiling or sky above), so no direction is ever empty haze.
+export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, bloom, plate = null, env = null }) {
   const plateDim = plate ? Math.max(plate.image.width, plate.image.height) : 1;
   return new THREE.ShaderMaterial({
     side: THREE.BackSide,
@@ -166,6 +168,10 @@ export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, blo
       uLod: { value: Math.max(1, Math.log2(maxDim || 512) - 3.2) },
       uTan: { value: new THREE.Vector2(tanH, tanV) },
       uBase: { value: new THREE.Color(base) },
+      uFloor: { value: new THREE.Color(env?.floor ?? base) },
+      uSky: { value: new THREE.Color(env?.sky ?? base) },
+      uOutdoor: { value: env?.outdoor ? 1 : 0 },
+      uEnv: { value: env ? 1 : 0 },
       uPaper: { value: PAPER.clone() },
       uCast: { value: AGE_CAST.clone() },
       uVivid: { value: 0 },
@@ -191,6 +197,10 @@ export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, blo
       uniform float uLod;
       uniform vec2 uTan;
       uniform vec3 uBase;
+      uniform vec3 uFloor;
+      uniform vec3 uSky;
+      uniform float uOutdoor;
+      uniform float uEnv;
       uniform vec3 uPaper;
       uniform vec3 uCast;
       uniform float uVivid;
@@ -234,6 +244,18 @@ export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, blo
         local = mix(uVivid, uCore, inside * forward);
         #endif
         #endif
+        // A place around the photo: its blurred colours at the horizon, a
+        // floor below (grain that recedes with distance), a ceiling or sky above.
+        {
+          float around = (1.0 - inside * smoothstep(0.0, -0.2, d.z)) * uEnv;
+          vec2 fp = d.xz / max(0.08, -d.y);
+          float grain = vnoise(fp * 2.5) * 0.5 + vnoise(fp * 9.0) * 0.25;
+          vec3 floorC = mix(col, uFloor * (0.55 + 0.9 * grain), smoothstep(-0.02, -0.3, d.y));
+          vec3 ceilC = mix(col, uSky * mix(0.85, 1.05, smoothstep(0.5, 1.0, d.y)), smoothstep(0.05, 0.4, d.y));
+          vec3 skyC = mix(col, uSky, smoothstep(0.0, 0.7, d.y));
+          vec3 placeC = d.y < 0.0 ? floorC : mix(ceilC, skyC, uOutdoor);
+          col = mix(col, placeC, around);
+        }
         col *= mix(mix(0.55, 1.0, smoothstep(-0.7, 0.3, d.y)), 1.0, inside);
         col = mix(fadedLook(col, uPaper * mix(0.4, 1.0, inside), uCast), col, local);
         col += (ign(gl_FragCoord.xy) - 0.5) * 0.012 * max(0.15, dot(col, vec3(0.3, 0.6, 0.1)));
