@@ -83,14 +83,23 @@ a {
   display: block;
 }
 
-.print[data-state='loaded'] .print-photo {
-  filter: saturate(0.25) contrast(0.85) brightness(1.08) sepia(0.15);
+.print-photo {
   transition: filter var(--t-develop) var(--ease-develop);
 }
 
+/* the colour stays out until the print has come up through the cream */
+.print[data-state='loaded'] .print-photo,
 .print[data-state='developing'] .print-photo {
-  filter: saturate(0.6) contrast(0.92) brightness(1.04);
-  transition: filter 4s var(--ease-develop);
+  filter: saturate(0.25) contrast(0.85) brightness(1.08) sepia(0.15);
+}
+
+/* the blank print the photo comes up through; main.js animates its opacity */
+.print-cream {
+  position: absolute;
+  inset: 0;
+  background: #e9e1d3;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .print-drop {
@@ -154,6 +163,21 @@ a {
   justify-content: center;
 }
 
+/* out of sight but still reachable with Tab; the label shows the focus */
+.take-photo input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.take-photo:focus-within,
+.print-drop:focus-within {
+  outline: 2px solid var(--safelight-glow);
+  outline-offset: 2px;
+}
+
 .anchors {
   position: absolute;
   inset: 0;
@@ -179,6 +203,36 @@ a {
 
 .anchor-dot:active {
   cursor: grabbing;
+}
+
+/* a new develop replaces the spots, so the old ones go under the cream with the photo */
+.print[data-state='developing'] .anchors {
+  visibility: hidden;
+}
+
+/* after developing, the spots come up one after another */
+.anchors.arriving .anchor-dot {
+  animation: spot-arrives var(--t-develop) var(--ease-develop) backwards;
+  animation-delay: calc(var(--i) * 450ms);
+}
+
+@keyframes spot-arrives {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+@keyframes spot-fades-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anchors.arriving .anchor-dot {
+    animation-name: spot-fades-in;
+  }
 }
 
 /* ---- the steps -------------------------------------------------------- */
@@ -320,6 +374,61 @@ textarea {
 .remove {
   padding: var(--space-2) var(--space-3);
   font-size: var(--step-0);
+}
+
+.add-spot {
+  margin-top: var(--space-3);
+}
+
+.sounds {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.sounds legend {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-size: var(--step-0);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--paper-3);
+}
+
+.sound-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-2) var(--space-4);
+}
+
+label.sound {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--step-1);
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--paper);
+  cursor: pointer;
+}
+
+.sound input {
+  width: auto;
+  accent-color: var(--safelight);
+}
+
+/* the text inputs show focus with their border, which a checkbox does not have */
+.sound input:focus-visible {
+  outline: 2px solid var(--safelight-glow);
+  outline-offset: 2px;
+}
+
+/* a fourth sound waits until one of the three is unticked */
+.sound:has(input:disabled) {
+  color: var(--paper-3);
+  cursor: default;
 }
 
 .warning {

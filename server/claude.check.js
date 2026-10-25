@@ -25,6 +25,15 @@ export async function checkClaudeRequest() {
     for (const k of ['temperature', 'top_p', 'top_k']) if (k in sent.body) problems.push(`${k} is rejected by this API version`);
     if (Math.abs(a.anchors[0].x - 0.5) > 0.001 || Math.abs(a.anchors[0].y - 0.5) > 0.001) problems.push('anchor not normalised to 0..1');
     if (a.soundLayers.length !== 3) problems.push('sound layers not capped at three');
+
+    // failures reach the person as the studio's warning, so they must be plain words
+    const failure = async (fakeFetch, want, what) => {
+      globalThis.fetch = fakeFetch;
+      const err = await analyzeWithClaude({ base64: 'AAAA', mediaType: 'image/jpeg', width: 10, height: 10 }).then(() => null, (e) => e);
+      if (!err?.message.includes(want) || !err.message.includes('place the spots yourself')) problems.push(`${what}: "${err?.message}"`);
+    };
+    await failure(async () => new Response(JSON.stringify({ error: { message: 'invalid x-api-key' } }), { status: 401 }), 'did not accept the API key', 'a wrong key');
+    await failure(async () => { throw new TypeError('fetch failed'); }, 'could not be reached', 'no network');
     return problems;
   } finally {
     globalThis.fetch = realFetch;

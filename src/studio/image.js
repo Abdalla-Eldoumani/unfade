@@ -13,7 +13,7 @@ export async function decodeImage(file) {
       await img.decode();
       return img;
     } catch {
-      throw new Error('This browser cannot open that file. Try a JPG or PNG.');
+      throw new Error(`This browser cannot open "${file.name}". Choose a JPEG, PNG or WebP photo${/\.hei[cf]$/i.test(file.name) ? ' (an iPhone HEIC opens on the iPhone itself; on a laptop, save it as a JPEG first)' : ''}.`);
     } finally {
       URL.revokeObjectURL(url);
     }
