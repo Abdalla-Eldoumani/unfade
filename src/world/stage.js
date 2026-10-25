@@ -4,15 +4,18 @@ import * as THREE from 'three';
 // starts. The second lever if the headset drops frames: try 0.8.
 const FRAMEBUFFER_SCALE = 1;
 const FOV_TALL_DEG = 60;
-const FOV_ACROSS_DEG = 55;
+const FOV_ACROSS_DEG = 66;
+const FOV_TALL_MAX_DEG = 112;
 
 // Vertical field of view for a window. Wide windows keep 60 degrees tall; a
 // portrait phone at 60 tall saw only about 30 across, which cut the questions
-// and the outer prints off, so it keeps about 55 across instead.
+// and the outer prints off. The samples' lights sit up to 31 degrees from the
+// centre, so it keeps 66 across; the photo fills only the middle band, where
+// the stretch of so tall a view is small.
 function windowFov(aspect) {
   const across = Math.tan((FOV_ACROSS_DEG * Math.PI) / 360);
   // never narrower than 60 tall, so near-square windows do not jump in
-  return Math.min(100, Math.max(FOV_TALL_DEG, (2 * Math.atan(across / aspect) * 180) / Math.PI));
+  return Math.min(FOV_TALL_MAX_DEG, Math.max(FOV_TALL_DEG, (2 * Math.atan(across / aspect) * 180) / Math.PI));
 }
 
 // Renderer, scene and camera, shared by the darkroom and the memories.
