@@ -42,7 +42,7 @@ Every line is a pass or a fail; a partial pass is a fail. Lines that need the he
 - The repository is public, and its history has no personal photos, saved memories, certificates or keys:
   ```bash
   git log --all --name-only --format= | sort -u | grep -E '^(data/|\.cert/|\.env)' && echo "STOP: private files in history" || echo "ok"
-  git log --all --oneline -G 'sk-ant-' | grep . && echo "STOP: a key in history" || echo "ok"
+  git log --all --oneline -G 'sk-ant-' -- . ':!.agent/INTEGRATE.md' | grep . && echo "STOP: a key in history" || echo "ok"
   ```
 - The submission on the MRUHacks platform is published, with the repository link, and checked from a second account or a private window.
 
