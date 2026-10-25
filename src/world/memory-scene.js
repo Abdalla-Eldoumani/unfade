@@ -95,7 +95,7 @@ export class MemoryScene {
         plate.needsUpdate = true;
       };
     }
-    const shared = { tanH, tanV, base, maxDim, aspect, bloom: this.material.uniforms.uBloom, plate };
+    const shared = { tanH, tanV, base, maxDim, aspect, bloom: this.material.uniforms.uBloom, plate, env: placeColours(spec) };
     this.periphery = new THREE.Mesh(new THREE.SphereGeometry(60, 48, 24), peripheryMaterial(photo, shared));
     this.periphery.renderOrder = -1;
     this.group.add(this.periphery);
@@ -373,6 +373,26 @@ export class MemoryScene {
     this.item = null;
     this.platePending = null;
   }
+}
+
+// The place around a memory with no generated world: a floor from the
+// photo's darkest colour, a ceiling from its lightest (indoors), or a sky
+// (outdoors, by its light), so up, down and behind are never empty.
+const NIGHT_SKY = new THREE.Color('#1d2433');
+const DAY_SKY = new THREE.Color('#b8c8d8');
+function placeColours(spec) {
+  const cols = (spec.palette.length ? spec.palette : ['#6b5a48', '#d9c4a8']).map((h) => new THREE.Color(h));
+  const lum = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+  cols.sort((a, b) => lum(a) - lum(b));
+  const darkest = cols[0];
+  const lightest = cols.at(-1);
+  const outdoor = spec.scene.scale === 'street' || spec.scene.scale === 'landscape';
+  const night = spec.scene.light === 'night';
+  return {
+    floor: darkest.clone().multiplyScalar(0.8),
+    sky: outdoor ? (night ? NIGHT_SKY.clone() : lightest.clone().lerp(DAY_SKY, 0.5)) : lightest.clone().multiplyScalar(0.9),
+    outdoor,
+  };
 }
 
 function easeOut(x) {
