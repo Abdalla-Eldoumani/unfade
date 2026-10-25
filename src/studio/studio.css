@@ -83,6 +83,12 @@ a {
   display: block;
 }
 
+/* the hidden attribute alone loses to display: block above */
+.print-photo[hidden],
+.print-wiggle[hidden] {
+  display: none;
+}
+
 .print-photo {
   transition: filter var(--t-develop) var(--ease-develop);
 }
