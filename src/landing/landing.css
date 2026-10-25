@@ -156,7 +156,8 @@ body {
   overflow-wrap: anywhere;
 }
 
-.addr-label {
+/* .how in front, or .how .edge above wins and takes the space away */
+.how .addr-label {
   margin: var(--space-5) 0 var(--space-1);
 }
 
