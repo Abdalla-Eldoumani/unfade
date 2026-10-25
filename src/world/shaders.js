@@ -109,9 +109,11 @@ export function memoryMaterial(photo, { aspect, palette }) {
       attribute float aEdge;
       varying vec2 vUv;
       varying float vEdge;
+      varying vec3 vWorldPos;
       void main() {
         vUv = uv;
         vEdge = aEdge;
+        vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
     `,
@@ -124,17 +126,30 @@ export function memoryMaterial(photo, { aspect, palette }) {
       uniform float uFadeIn;
       varying vec2 vUv;
       varying float vEdge;
+      varying vec3 vWorldPos;
       ${DITHER}
       ${FADED}
       ${BLOOM}
       void main() {
+        // fade out triangles viewed edge-on: the depth cliffs at the cup/cat
+        // boundary are nearly perpendicular to the camera and look like spikes
+        // from behind. Screen-space derivatives give the face normal.
+        vec3 fdx = dFdx(vWorldPos);
+        vec3 fdy = dFdy(vWorldPos);
+        vec3 faceN = normalize(cross(fdx, fdy));
+        float facing = abs(dot(faceN, normalize(cameraPosition - vWorldPos)));
+        float angleFade = smoothstep(0.02, 0.18, facing);
+
         float local = bloomAt(vUv, uVivid);
-        vec3 c = texture2D(uPhoto, vUv, (1.0 - local) * 2.4).rgb;
+        // progressively blur stretched triangles at depth edges
+        float edgeBlur = smoothstep(0.15, 0.6, vEdge) * 5.0;
+        vec3 c = texture2D(uPhoto, vUv, (1.0 - local) * 2.4 + edgeBlur).rgb;
         vec3 col = mix(fadedLook(c, uPaper, uCast), c, local);
         col += (hash(vUv * 1024.0 + fract(uTime * 7.0)) - 0.5) * mix(0.06, 0.015, local);
         float border = smoothstep(0.0, 0.05, min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y)));
-        // a clean cut at depth edges: a dithered fade there reads as a speckled fringe once the head moves
-        float keep = step(vEdge, 0.5) * border * uFadeIn;
+        // combine: depth-edge fade, angle fade, border, and master fade
+        float edgeFade = 1.0 - smoothstep(0.3, 0.85, vEdge);
+        float keep = edgeFade * angleFade * border * uFadeIn;
         if (keep < ign(gl_FragCoord.xy)) discard;
         gl_FragColor = vec4(max(col, 0.0), 1.0);
         #include <colorspace_fragment>
@@ -150,22 +165,19 @@ export function memoryMaterial(photo, { aspect, palette }) {
 // uBloom should be the memory material's own uniform, shared.
 // plate, if given, is the background plate (depth-mesh.js): shown through the
 // gaps instead of the photo once the head moves.
-export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, bloom, plate = null }) {
+export function peripheryMaterial(photo, { tanH, tanV, env, maxDim, aspect, bloom, plate = null, envMap = null }) {
   const plateDim = plate ? Math.max(plate.image.width, plate.image.height) : 1;
   return new THREE.ShaderMaterial({
     side: THREE.BackSide,
     depthWrite: false,
-    defines: { HAZE_DETAIL, GAP_BLUR: GAP_BLUR.toFixed(2), GAP_FILL: plate ? 1 : 0 },
+    defines: { HAZE_DETAIL, GAP_BLUR: GAP_BLUR.toFixed(2), GAP_FILL: plate ? 1 : 0, HAS_ENV_MAP: envMap ? 1 : 0 },
     uniforms: {
       uPhoto: { value: photo },
       uPlate: { value: plate },
-      // the same blur on the smaller plate is that many fewer levels
       uPlateShift: { value: Math.max(0, Math.log2((maxDim || 512) / plateDim)) },
-      // an explicit mip level: past the photo's edge the uv is clamped, so
-      // automatic level selection would pick the sharpest level and streak
       uLod: { value: Math.max(1, Math.log2(maxDim || 512) - 3.2) },
       uTan: { value: new THREE.Vector2(tanH, tanV) },
-      uBase: { value: new THREE.Color(base) },
+      uEnvMap: { value: envMap },
       uPaper: { value: PAPER.clone() },
       uCast: { value: AGE_CAST.clone() },
       uVivid: { value: 0 },
@@ -179,7 +191,6 @@ export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, blo
       varying float vLean;
       void main() {
         vDir = position;
-        // how far the eye is from where the camera stood (the sphere's centre)
         vLean = distance(cameraPosition, (modelMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz);
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
       }
@@ -187,10 +198,10 @@ export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, blo
     fragmentShader: /* glsl */ `
       uniform sampler2D uPhoto;
       uniform sampler2D uPlate;
+      uniform sampler2D uEnvMap;
       uniform float uPlateShift;
       uniform float uLod;
       uniform vec2 uTan;
-      uniform vec3 uBase;
       uniform vec3 uPaper;
       uniform vec3 uCast;
       uniform float uVivid;
@@ -201,40 +212,52 @@ export function peripheryMaterial(photo, { tanH, tanV, base, maxDim, aspect, blo
       ${DITHER}
       ${FADED}
       ${BLOOM}
+
+      // Equirectangular: direction vector → panorama UV
+      vec2 envUV(vec3 dir) {
+        float phi = atan(dir.z, dir.x);
+        float theta = asin(clamp(dir.y, -1.0, 1.0));
+        return vec2(phi / 6.2831853 + 0.5, theta / 3.1415926 + 0.5);
+      }
+
       void main() {
         vec3 d = normalize(vDir);
-        vec3 col = uBase;
+
+        // Sample the 360° panorama
+        vec3 env = texture2D(uEnvMap, envUV(d)).rgb;
+
+        vec3 col = env;
         float inside = 0.0;
         float local = uVivid;
         #if HAZE_DETAIL > 0
-        // Project the photo onto the full sphere: forward rays use the real
-        // projection, side and rear rays clamp to the nearest edge at max blur,
-        // wrapping the photo's colours all the way around as a soft glow.
+        // Photo projection: forward rays use the real projection, sides and
+        // rear clamp to the nearest edge at heavy blur
         vec2 p = d.xy / max(0.05, -d.z);
         vec2 uv = 0.5 + p / (2.0 * uTan);
         vec2 outside = max(abs(uv - 0.5) - 0.5, 0.0) * 2.0 * uTan;
         inside = 1.0 - clamp(length(outside) * 3.0, 0.0, 1.0);
-        // forward: 1 when looking at photo, 0 when looking behind
         float forward = smoothstep(0.0, -0.2, d.z);
-        // even behind, keep 40 % of the blurred edge colour so the sphere
-        // never drops to flat near-black
-        float w = exp(-length(outside) * 0.8) * max(forward, 0.4);
+        // Feather: start blending to panorama well before the photo edge
+        // to eliminate the visible rectangle. edgeD = 0 at center, 1 at edge.
+        float edgeD = max(abs(uv.x - 0.5), abs(uv.y - 0.5)) * 2.0;
+        float w = (1.0 - smoothstep(0.6, 1.1, edgeD)) * forward;
         float lean = smoothstep(0.03, 0.2, vLean);
-        // push to heavier blur for non-forward directions
-        float lod = mix(uLod + 2.0, mix(2.5, uLod, GAP_BLUR * lean), inside * forward);
+        // Extra blur at photo edges: the blurrier the photo is at the
+        // transition, the less visible the boundary
+        float edgeBlur = smoothstep(0.45, 0.95, edgeD) * 4.0;
+        float lod = mix(uLod + 2.0, mix(2.5, uLod, GAP_BLUR * lean), inside * forward) + edgeBlur;
         vec3 c = textureLod(uPhoto, clamp(uv, 0.0, 1.0), lod).rgb;
         #if GAP_FILL
         vec3 behind = textureLod(uPlate, clamp(uv, 0.0, 1.0), max(0.0, lod - uPlateShift)).rgb;
         c = mix(c, behind, inside * lean * forward);
         #endif
-        col = mix(uBase, c * mix(0.65, 1.0, inside), w);
+        col = mix(env, c, w);
         #if HAZE_DETAIL > 1
         local = mix(uVivid, bloomAt(clamp(uv, 0.0, 1.0), uCore), inside * forward);
         #else
         local = mix(uVivid, uCore, inside * forward);
         #endif
         #endif
-        col *= mix(mix(0.55, 1.0, smoothstep(-0.7, 0.3, d.y)), 1.0, inside);
         col = mix(fadedLook(col, uPaper * mix(0.4, 1.0, inside), uCast), col, local);
         col += (ign(gl_FragCoord.xy) - 0.5) * 0.012 * max(0.15, dot(col, vec3(0.3, 0.6, 0.1)));
         gl_FragColor = vec4(max(col, 0.0) * uFadeIn, 1.0);
