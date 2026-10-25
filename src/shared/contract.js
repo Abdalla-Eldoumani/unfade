@@ -128,6 +128,27 @@ export function normalizeMemory(input) {
       analysis: pick(m.source?.analysis, ['claude', 'fallback', 'manual'], 'manual'),
       model: str(m.source?.model, 40) || null,
     },
+    world: world(m.world),
+  };
+}
+
+// Optional: a generated splat world for this memory (server/worldlabs.js),
+// files as server paths. Anything missing or malformed means no world.
+const WORLD_URL_RE = /^\/api\/world\/[a-z0-9-]{1,48}\/file\/[a-z0-9._-]{1,64}$/;
+function world(w) {
+  if (!w || typeof w !== 'object') return null;
+  const url = (v) => (typeof v === 'string' && WORLD_URL_RE.test(v) ? v : null);
+  const splat = url(w.splat) || url(w.splatSmall);
+  if (!splat) return null;
+  const scale = Number(w.scale);
+  const groundOffset = Number(w.groundOffset);
+  return {
+    splat,
+    splatSmall: url(w.splatSmall) || splat,
+    pano: url(w.pano),
+    collider: url(w.collider),
+    scale: scale > 0 && scale < 1000 ? scale : 1,
+    groundOffset: Number.isFinite(groundOffset) && Math.abs(groundOffset) < 1000 ? groundOffset : 0,
   };
 }
 

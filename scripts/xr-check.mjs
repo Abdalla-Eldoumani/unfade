@@ -14,9 +14,13 @@ const SHOTS = fileURLToPath(new URL('../xr-shots/', import.meta.url));
 const IWER = readFileSync(new URL('../node_modules/iwer/build/iwer.min.js', import.meta.url), 'utf8');
 // Only the bundled samples, so saved memories on this laptop never change what the check covers.
 const SAMPLES = JSON.parse(readFileSync(new URL('../public/memories/index.json', import.meta.url), 'utf8')).memories;
-// Software rendering keeps the check the same on every laptop, so it runs at a
-// few frames per second; every wait below is a poll with a deadline, never a fixed sleep.
-const ARGS = ['--ignore-certificate-errors', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'];
+// The laptop's GPU: a memory's generated world (a Gaussian splat) in software
+// rendering took seconds a frame and crashed the tab. XR_SOFTWARE=1 forces
+// software, the same on every laptop but a few frames a second at best; Chrome
+// also falls back to it without a GPU. Every wait below is a poll with a deadline.
+const ARGS = process.env.XR_SOFTWARE
+  ? ['--ignore-certificate-errors', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']
+  : ['--ignore-certificate-errors', '--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-swiftshader'];
 // Thrown on purpose to prove the ?debug readout shows errors; never counted as a failure.
 const INTENTIONAL = 'intentional error from xr-check';
 
@@ -148,6 +152,17 @@ async function playOne(page, index) {
   const points = await page.evaluate(() =>
     window.unfade.memory.anchors.map((a) => a.group.getWorldPosition(new a.group.position.constructor()).toArray()),
   );
+  // The title is full for a few scene seconds, then settles at 0.35; with a
+  // splat world the emulator's clock runs about 3x real time and each poll is
+  // slow, so the page itself keeps the highest opacity it reaches, watching
+  // from before the last light comes back.
+  await page.evaluate(() => {
+    clearInterval(window.__titleWatch);
+    window.__titleMax = 0;
+    window.__titleWatch = setInterval(() => {
+      window.__titleMax = Math.max(window.__titleMax, window.unfade.memory.titleCard?.material.opacity ?? 0);
+    }, 50);
+  });
   for (const [i, p] of points.entries()) {
     await lookAt(page, p);
     const bloomed = await until(page, (i) => window.unfade.memory.progress().bloomed > i, i, 60000);
@@ -157,10 +172,11 @@ async function playOne(page, index) {
   const revived = await until(page, () => window.unfade.memory.revived, null, 30000);
   if (!report(revived, 'every light back revives the memory')) return;
   // the colour first, then the title in the person's words
-  const titled = await until(page, () => window.unfade.memory.vivid >= 1 && window.unfade.memory.titleCard?.material.opacity >= 0.99, null, 30000);
+  const titled = await until(page, () => window.unfade.memory.vivid >= 1 && window.__titleMax >= 0.99, null, 30000);
   await frames(page, 2);
   await snap(page, `${id}-revived`);
-  if (!report(titled, 'the colour comes back, then the title writes in')) return;
+  const seen = await page.evaluate(() => `colour ${window.unfade.memory.vivid.toFixed(2)}, title at most ${window.__titleMax.toFixed(2)}, card ${Boolean(window.unfade.memory.titleCard)}`);
+  if (!report(titled, 'the colour comes back, then the title writes in', seen)) return;
 
   await press(page, 'b-button');
   // the fade back to the darkroom keeps it busy, and a busy darkroom ignores the trigger

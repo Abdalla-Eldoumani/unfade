@@ -2,6 +2,7 @@ import '../shared/tokens.css';
 import './studio.css';
 import { LIGHTS, MAX_ANCHORS, MAX_SOUND_LAYERS, PARTICLES, SCALES, SOUND_LAYERS, normalizeMemory, slugify, validateMemory } from '../shared/contract.js';
 import { applyBrand } from '../shared/brand.js';
+import { ENVIRONMENTS, environmentUrl, pickEnvironment } from '../world/environments.js';
 import { analyzePhoto } from './analyze.js';
 import { depthToPngDataUrl, estimateDepth, loadDepthModel } from './depth.js';
 import { decodeImage, imageStats, jpegDataUrl, palette, readFocal35, resizeToCanvas } from './image.js';
@@ -11,6 +12,23 @@ const LABELS = {
   light: { warm_indoor: 'Warm lamp light', cool_indoor: 'Cool indoor light', daylight: 'Daylight', golden_hour: 'Golden hour', overcast: 'Overcast', night: 'Night', candlelight: 'Candlelight' },
   particles: { dust: 'Dust in the light', snow: 'Snow', rain: 'Rain', fireflies: 'Fireflies', confetti: 'Confetti', petals: 'Petals', mist: 'Mist', none: 'Nothing' },
   sounds: { room_tone: 'A quiet room', wind: 'Wind', rain: 'Rain', waves: 'Waves', stream: 'Running water', fire: 'A fire', birds: 'Birds', crickets: 'Crickets', city: 'The city', night_air: 'Night air' },
+  surroundings: {
+    fireplace: 'A room by the fire',
+    warm_restaurant_night: 'A warm room at night',
+    wooden_lounge: 'A warm wooden room',
+    lebombo: 'A bright room',
+    ballroom: 'A hall for a party',
+    urban_street_01: 'A city street',
+    vignaioli_night: 'A town square at night',
+    meadow_2: 'A meadow',
+    misty_pines: 'A misty forest',
+    spiaggia_di_mondello: 'A beach',
+    the_sky_is_on_fire: 'The sea at sunset',
+    spruit_sunrise: 'A field at golden hour',
+    alps_field: 'Mountains',
+    snowy_park_01: 'A snowy park',
+    satara_night_no_lamps: 'A night under the stars',
+  },
 };
 
 applyBrand('studio');
@@ -39,8 +57,16 @@ const el = {
   save: $('.save'),
   download: $('.download'),
   saved: $('.saved'),
+  worldOpt: $('.world-opt'),
+  worldBox: $('.world-opt-box'),
+  worldStatus: $('.world-status'),
   server: $('.studio-server'),
   wiggleToggle: $('.wiggle-toggle'),
+  surroundings: $('.surroundings'),
+  surroundingsView: $('.surroundings-view'),
+  surroundingsName: $('.surroundings-name'),
+  surroundingsEdge: $('.surroundings .edge'),
+  sceneMore: $('.scene-more'),
 };
 
 const state = {
@@ -81,12 +107,42 @@ function limitSounds() {
 }
 el.sounds.addEventListener('change', limitSounds);
 
+// The headset builds the world around the photo from these same fields
+// (src/world/environments.js), so the studio shows it as they change.
+function showSurroundings() {
+  const name = pickEnvironment({
+    scale: el.scale.value,
+    light: el.light.value,
+    particles: el.particles.value,
+    soundLayers: soundBoxes.filter((b) => b.checked).map((b) => b.value),
+  });
+  const view = el.surroundingsView;
+  view.style.backgroundImage = `url(${environmentUrl(name)})`;
+  // the part straight ahead in the headset, centred in the strip (the
+  // panorama is drawn twice the strip's width)
+  const ahead = (((0.25 + (ENVIRONMENTS[name]?.yaw ?? 0)) % 1) + 1) % 1;
+  const w = view.clientWidth || 320;
+  view.style.backgroundPosition = `${Math.round(w * 0.5 - ahead * 2 * w)}px 50%`;
+  el.surroundingsName.textContent = LABELS.surroundings[name] || '';
+  el.surroundings.hidden = false;
+}
+for (const input of [el.scale, el.light, el.particles, el.sounds]) {
+  input.addEventListener('change', () => {
+    // once the person has set the scene, it is no longer a guess
+    el.surroundingsEdge.textContent = 'The world around it';
+    showSurroundings();
+  });
+}
+addEventListener('resize', () => !el.surroundings.hidden && showSurroundings());
+
 // ---- server status ---------------------------------------------------------
 
 fetch('/api/health', { signal: AbortSignal.timeout(3000) })
   .then((r) => r.json())
   .then((h) => {
     el.server.textContent = h.claude ? 'Server live · Claude on' : 'Server live · Claude off';
+    // a 3D place is offered only when the server can build one; off unless chosen
+    el.worldOpt.hidden = !h.worlds;
   })
   .catch(() => {
     el.server.textContent = 'No server · files only';
@@ -144,6 +200,8 @@ async function loadFile(file) {
   el.print.dataset.state = 'loaded';
   el.develop.disabled = false;
   el.develop.textContent = 'Develop';
+  el.develop.classList.remove('ghost');
+  el.surroundings.hidden = true;
   el.review.hidden = true;
   el.saveStep.hidden = true;
   el.saved.hidden = true;
@@ -213,6 +271,8 @@ async function develop() {
     state.developed = true;
     state.developedWords = words();
     el.develop.textContent = 'Develop again';
+    // the next step is hanging it; developing again is the quiet choice now
+    el.develop.classList.add('ghost');
     el.review.hidden = false;
     el.saveStep.hidden = false;
     el.wiggleToggle.hidden = false;
@@ -242,8 +302,23 @@ function applyAnalysis({ analysis: a, source, model, warning }) {
   limitSounds();
   state.anchors = (a.anchors || []).slice(0, MAX_ANCHORS).map((x, i) => ({ ...x, id: `a${i + 1}`, note: '' }));
   el.warning.hidden = !warning;
-  el.warning.textContent = warning || '';
+  el.warning.textContent = visitorWarning(warning);
   renderAnchors();
+  // Without Claude the scene is a guess from the photo's brightness alone (a
+  // sunset coast comes back as a warm room), so the controls open under it.
+  const guessed = source !== 'claude';
+  el.surroundingsEdge.textContent = guessed ? 'A first guess' : 'The world around it';
+  el.sceneMore.open = guessed;
+  showSurroundings();
+}
+
+// A missing or refused key is the team's to fix, not the visitor's: they
+// read what to do, and the server's own words go to the console.
+function visitorWarning(warning) {
+  if (!warning) return '';
+  if (!/ANTHROPIC_API_KEY|API key/i.test(warning)) return warning;
+  console.warn(warning);
+  return 'Claude is not connected right now, so tap the photo to choose up to three spots yourself.';
 }
 
 function setProgress(text) {
@@ -375,7 +450,7 @@ el.addSpot.addEventListener('click', () => {
 
 function addSpot(x, y) {
   if (state.anchors.length >= MAX_ANCHORS) return;
-  state.anchors.push({ id: `a${state.anchors.length + 1}`, x, y, label: 'this', question: 'What do you remember here?', sound: 'none', note: '' });
+  state.anchors.push({ id: `a${state.anchors.length + 1}`, x, y, label: `spot ${state.anchors.length + 1}`, question: 'What do you remember here?', sound: 'none', note: '' });
   renderAnchors();
 }
 
@@ -488,6 +563,7 @@ el.save.addEventListener('click', async () => {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(body.error || `server said ${res.status}`);
     el.saved.innerHTML = `“${escapeHtml(body.spec.title)}” is on the line. <a href="/world.html">Open the darkroom</a> or put on the headset.`;
+    if (!el.worldOpt.hidden && el.worldBox.checked) buildWorld(body.spec.id);
   } catch (err) {
     el.saved.textContent = `Could not save: ${err.message}. You can still download the files.`;
   } finally {
@@ -495,6 +571,37 @@ el.save.addEventListener('click', async () => {
     el.save.disabled = false;
   }
 });
+
+// Builds the 3D place around a hung memory (server/worldlabs.js) and says
+// how it is going. The print is already on the line; this never holds it up.
+const WORLD_POLL_MS = 5000;
+const WORLD_GIVE_UP_MS = 16 * 60 * 1000;
+async function buildWorld(id) {
+  const say = (text) => {
+    el.worldStatus.textContent = text;
+    el.worldStatus.hidden = false;
+  };
+  const started = Date.now();
+  say('Building the place around it. This takes about five minutes; you can step in now and it appears next time.');
+  try {
+    let s = await (await fetch(`/api/world/${id}`, { method: 'POST' })).json();
+    while (s.status === 'queued' || s.status === 'pending') {
+      if (Date.now() - started > WORLD_GIVE_UP_MS) {
+        say('The place is still being built. The memory works without it.');
+        return;
+      }
+      await new Promise((r) => setTimeout(r, WORLD_POLL_MS));
+      s = await (await fetch(`/api/world/${id}`)).json();
+      const mins = Math.max(1, 5 - Math.floor((Date.now() - started) / 60000));
+      if (s.status === 'pending') say(`Building the place around it. About ${mins} more minute${mins === 1 ? '' : 's'}.`);
+      if (s.status === 'queued') say('Waiting for another place to finish first.');
+    }
+    if (s.status === 'ready') say('The place around it is ready. Step in again to stand inside it.');
+    else say(`The place could not be built (${s.reason || 'no reason given'}). The memory works without it.`);
+  } catch {
+    say('The place could not be built, because the server stopped answering. The memory works without it.');
+  }
+}
 
 el.download.addEventListener('click', () => {
   if (needsTitle()) return;

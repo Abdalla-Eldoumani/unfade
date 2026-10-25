@@ -2,9 +2,11 @@ import * as THREE from 'three';
 import { fileUrl, loadDepth } from '../shared/memories.js';
 import { AnchorMarker } from './anchors.js';
 import { backgroundPlate, buildDepthMesh, plateSize } from './depth-mesh.js';
+import { ENVIRONMENTS, environmentUrl, pickEnvironment } from './environments.js';
 import { makeParticles } from './particles.js';
 import { memoryMaterial, peripheryMaterial } from './shaders.js';
 import { FONTS, disposeMesh, glowMap, makeText } from './text.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 const BLOOM_S = 2.2;
 const BLOOM_RADIUS = 0.45;
@@ -17,15 +19,25 @@ const TITLE_AFTER_S = 2.4;
 // at what the nearer thing hides (the background plate, depth-mesh.js) rather
 // than a blurred copy of the nearer thing. false switches it off.
 const GAP_FILL = true;
+// A bloom's reach in a generated world, in metres, when fully open.
+const SPLAT_BLOOM_M = 1.4;
+// Walking in a generated world stops this far short of its collider mesh:
+// a single photo shows only the front of things, so inside them is void.
+const CLEARANCE_M = 0.35;
+const X_AXIS = new THREE.Vector3(1, 0, 0);
 const loader = new THREE.TextureLoader();
 
 // One memory, stood up in 3D around the viewer. Owns its anchors, blooms,
 // haze and particles; knows nothing about input or networking.
 export class MemoryScene {
-  constructor({ maxAnisotropy = 4 } = {}) {
+  constructor({ maxAnisotropy = 4, stage = null } = {}) {
     this.group = new THREE.Group();
     this.group.name = 'memory';
     this.maxAnisotropy = maxAnisotropy;
+    this.stage = stage;
+    this.splat = null;
+    this.viewPitch = 0;
+    this.viewFov = 1;
     this.item = null;
     this.anchors = [];
     this.blooms = [];
@@ -47,18 +59,23 @@ export class MemoryScene {
     this.dispose();
     this.item = item;
     const { spec } = item;
-    const [photo, depth, envMap] = await Promise.all([
+    const [photo, depth, surroundings] = await Promise.all([
       loader.loadAsync(fileUrl(item, 'photo')),
       loadDepth(fileUrl(item, 'depth')),
-      loader.loadAsync(item.base + 'env.jpg').catch(() => null),
+      loadSurroundings(item),
     ]);
+    const { map: envMap, yaw: envYaw } = surroundings;
     photo.colorSpace = THREE.SRGBColorSpace;
     photo.anisotropy = this.maxAnisotropy;
     photo.generateMipmaps = true;
     photo.minFilter = THREE.LinearMipmapLinearFilter;
     if (envMap) {
       envMap.colorSpace = THREE.SRGBColorSpace;
-      envMap.minFilter = THREE.LinearFilter;
+      // mips let the shader blur the surroundings near the photo; repeat
+      // closes the seam where the panorama's two ends meet behind the viewer
+      envMap.generateMipmaps = true;
+      envMap.minFilter = THREE.LinearMipmapLinearFilter;
+      envMap.wrapS = THREE.RepeatWrapping;
     }
 
     this.built = buildDepthMesh(spec, depth);
@@ -84,10 +101,38 @@ export class MemoryScene {
         plate.needsUpdate = true;
       };
     }
-    const shared = { tanH, tanV, env, maxDim, aspect, bloom: this.material.uniforms.uBloom, plate, envMap };
+    const shared = { tanH, tanV, env, maxDim, aspect, bloom: this.material.uniforms.uBloom, plate, envMap, envYaw };
     this.periphery = new THREE.Mesh(new THREE.SphereGeometry(60, 48, 24), peripheryMaterial(photo, shared));
     this.periphery.renderOrder = -1;
     this.group.add(this.periphery);
+
+    // A generated world replaces the photo sheet and the haze: it already
+    // holds the photo's view and everything around it. If it fails to load,
+    // the sheet and haze stay, so there is never nothing to see.
+    if (spec.world && this.stage) {
+      let splat = null;
+      try {
+        // the splat renderer is a large download, so only a memory with a
+        // generated world fetches it; the darkroom loads without it
+        const { WorldSplat, findPhotoView } = await import('./world-splat.js');
+        splat = new WorldSplat();
+        const view = spec.world.pano ? await findPhotoView(spec.world, photo.image, tanH, tanV) : { yaw: 0, pitch: 0 };
+        const mesh = await splat.load(spec.world, { stage: this.stage, xr: this.stage.renderer.xr.isPresenting, view });
+        // the photo looks this far up (+) or down (-) inside its world
+        this.viewPitch = view.pitch;
+        this.viewFov = view.fov ?? 1;
+        if (this.item === item) {
+          this.splat = splat;
+          this.group.add(mesh);
+          this.mesh.visible = false;
+          this.periphery.visible = false;
+          if (spec.world.collider) await this.loadCollider(spec.world, mesh, item);
+        } else splat.dispose();
+      } catch (err) {
+        console.warn('the world did not load; showing the photo instead:', err.message);
+        splat?.dispose();
+      }
+    }
 
     this.particles = makeParticles(spec.scene.particles, spec.palette);
     if (this.particles) this.group.add(this.particles);
@@ -97,6 +142,7 @@ export class MemoryScene {
       : [{ id: 'center', x: 0.5, y: 0.5, label: 'this moment', question: 'What do you remember here?', sound: 'none', note: '' }];
     for (const a of anchors) {
       const p = this.built.pointAt(a.x, a.y).multiplyScalar(0.94);
+      if (this.splat) this.onWorld(p, a, tanH, tanV);
       const marker = new AnchorMarker(a, p);
       if (a.note) marker.addNote(a.note, '');
       this.anchors.push(marker);
@@ -113,6 +159,56 @@ export class MemoryScene {
     this.vividTarget = 0;
     this.revived = false;
     return this;
+  }
+
+  // Moves anchor point p onto the generated world: along the photo's ray as
+  // Marble saw it (its tilt and width), at the collider's surface if it has
+  // one, else at the depth map's distance.
+  onWorld(p, a, tanH, tanV) {
+    const dist = p.length();
+    const dir = new THREE.Vector3((a.x - 0.5) * 2 * tanH * this.viewFov, (0.5 - a.y) * 2 * tanV * this.viewFov, -1)
+      .normalize()
+      .applyAxisAngle(X_AXIS, this.viewPitch);
+    let reach = dist;
+    if (this.collider) {
+      this.group.updateMatrixWorld(true);
+      const from = this.group.localToWorld(new THREE.Vector3());
+      const along = dir.clone().transformDirection(this.group.matrixWorld);
+      const hit = new THREE.Raycaster(from, along, 0.05, 50).intersectObject(this.collider, true)[0];
+      if (hit) reach = Math.max(0.2, hit.distance * 0.94);
+    }
+    p.copy(dir).multiplyScalar(reach);
+  }
+
+  // The world's coarse collider, in the splat's own frame, never drawn.
+  async loadCollider(world, splatMesh, item) {
+    try {
+      const gltf = await new GLTFLoader().loadAsync(world.collider);
+      if (this.item !== item) return;
+      const c = gltf.scene;
+      c.quaternion.copy(splatMesh.quaternion);
+      c.scale.copy(splatMesh.scale);
+      c.visible = false;
+      c.traverse((o) => {
+        if (o.isMesh) o.material.side = THREE.DoubleSide;
+      });
+      this.collider = c;
+      this.group.add(c);
+    } catch (err) {
+      console.warn('no collider for this world; walking is not blocked:', err.message);
+    }
+  }
+
+  // True when moving the eye from a to b (world space) would come within
+  // CLEARANCE_M of the world's surfaces.
+  blocked(a, b) {
+    if (!this.collider) return false;
+    const dir = new THREE.Vector3().subVectors(b, a);
+    const len = dir.length();
+    if (len < 1e-6) return false;
+    this.collider.updateMatrixWorld(true);
+    const ray = new THREE.Raycaster(a, dir.divideScalar(len), 0, len + CLEARANCE_M);
+    return ray.intersectObject(this.collider, true).length > 0;
   }
 
   // Stand the memory around the viewer: its camera position is their eyes.
@@ -219,6 +315,13 @@ export class MemoryScene {
     pu.uVivid.value = vividAll;
     pu.uCore.value = this.vivid;
     pu.uFadeIn.value = this.fadeIn;
+    if (this.splat) {
+      this.splat.setVivid(this.vivid);
+      this.splat.setBlooms(this.blooms.map((b, i) => ({
+        position: this.anchors[i].group.getWorldPosition(new THREE.Vector3()),
+        radius: (b.r / BLOOM_RADIUS) * SPLAT_BLOOM_M * b.w,
+      })));
+    }
     if (this.particles) {
       const pm = this.particles.material.uniforms;
       pm.uTime.value = t;
@@ -264,6 +367,11 @@ export class MemoryScene {
   }
 
   dispose() {
+    this.splat?.dispose();
+    this.splat = null;
+    this.viewPitch = 0;
+    this.viewFov = 1;
+    this.collider = null;
     for (const child of [...this.group.children]) {
       this.group.remove(child);
       disposeMesh(child);
@@ -327,6 +435,17 @@ function envColors(spec) {
     bot: c(palette[4] || palette[2] || '#4d2f1a', 0.18),
     night: 0,
   };
+}
+
+// A sample can bring its own env.jpg; any other memory gets a panorama from
+// the library, picked from its scene. No panorama at all (a failed load)
+// leaves the palette's sky and ground in the shader.
+async function loadSurroundings(item) {
+  const own = item.base?.startsWith('/memories/') ? await loader.loadAsync(item.base + 'env.jpg').catch(() => null) : null;
+  if (own) return { map: own, yaw: 0 };
+  const name = pickEnvironment(item.spec.scene);
+  const map = await loader.loadAsync(environmentUrl(name)).catch(() => null);
+  return { map, yaw: ENVIRONMENTS[name]?.yaw ?? 0 };
 }
 
 function easeOut(x) {

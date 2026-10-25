@@ -37,6 +37,13 @@ body {
   color: var(--paper);
 }
 
+/* the small status words: a wide soft shadow smears them into a grey smudge
+   once the memory's colour is back, so they take a tight one and a lighter grey */
+.hud-status {
+  color: var(--paper-2);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+
 .hud-bottom {
   grid-row: 3;
   display: grid;

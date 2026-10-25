@@ -67,6 +67,51 @@ body {
   line-height: 1.05;
 }
 
+.now-title:empty {
+  display: none;
+}
+
+/* Before anyone steps in: what this page is for, in three lines. */
+.now-empty {
+  max-width: 34rem;
+  margin-top: var(--space-5);
+}
+
+.now-empty[hidden] {
+  display: none;
+}
+
+.now-empty-lead {
+  margin: 0 0 var(--space-5);
+  font-family: var(--font-hand);
+  font-size: var(--step-4);
+  line-height: 1.15;
+  color: var(--paper);
+}
+
+.now-empty-steps {
+  list-style: none;
+  margin: 0;
+  padding: var(--space-4) 0 0;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.now-empty-steps li {
+  display: grid;
+  grid-template-columns: 2.25rem minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: baseline;
+  color: var(--paper-2);
+  line-height: 1.55;
+}
+
+.now-empty-steps em {
+  font-style: normal;
+  color: var(--ember);
+}
+
 /* The open memory as a print: paper border, dots where the spots are. */
 .now-photo {
   position: relative;

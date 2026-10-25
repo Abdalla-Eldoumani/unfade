@@ -66,12 +66,18 @@ export class Hub {
     this.safelight.position.set(0, 2.2, -2.9);
     this.group.add(this.safelight);
     this.group.add(new THREE.HemisphereLight('#3a1f17', '#050302', 0.9));
-    const front = new THREE.PointLight('#ffd9b0', 0.6, 3, 2);
-    front.position.set(0, 1.9, 0.2);
+    // a warm lamp over the line, so the prints are the warmest, brightest
+    // thing in the room and the red stays at the far wall
+    const front = new THREE.PointLight('#ffcf9e', 1.5, 4, 2);
+    front.position.set(0, 2.05, -0.15);
     this.group.add(front);
 
     this.line = new THREE.Group();
     this.group.add(this.line);
+    // a soft amber halo behind the prints, so they read against the dark
+    this.lineGlow = makeGlow('#ffb070', 3.4, 0.14);
+    this.lineGlow.position.z = -0.3;
+    this.line.add(this.lineGlow);
     this.lineMesh = new THREE.Mesh(
       new THREE.CylinderGeometry(0.0025, 0.0025, 1, 6),
       new THREE.MeshStandardMaterial({ color: '#8a7a6a', roughness: 0.7 }),

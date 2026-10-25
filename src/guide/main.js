@@ -13,6 +13,7 @@ const params = new URLSearchParams(location.search);
 const ui = {
   status: $('.guide-status'),
   where: $('.now-where'),
+  empty: $('.now-empty'),
   title: $('.now-title'),
   photoBox: $('.now-photo'),
   photo: $('.now-photo img'),
@@ -124,6 +125,7 @@ function renderNow(force = false) {
   else ui.where.textContent = `${peer.name || 'The headset'} is in the darkroom`;
   ui.title.textContent = current?.spec.title || '';
   ui.photoBox.hidden = !current;
+  ui.empty.hidden = Boolean(current);
   ui.form.hidden = !current;
   if (!current) {
     ui.anchors.replaceChildren();

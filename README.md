@@ -6,7 +6,7 @@ A faded instant print hangs on a line in a darkroom. Pick it up and shake it unt
 
 It runs in a Meta Quest 2 through Meta Quest Browser, and in any desktop or phone browser as a window you look around in. A companion page lets someone beside the headset add what they remember, and a mirror page shows a projector what the visitor sees.
 
-The 3D scene comes from one ordinary photo: a depth model runs in the browser and every pixel is pushed out along the ray the camera saw it on, so standing still you see the photo exactly and moving your head gives real parallax. Claude, if a key is set, looks at the photo and suggests the spots and the questions. Everything else runs on one laptop.
+The 3D scene comes from one ordinary photo: a depth model runs in the browser and every pixel is pushed out along the ray the camera saw it on, so standing still you see the photo exactly and moving your head gives real parallax. Claude, if a key is set, looks at the photo and suggests the spots and the questions. Around the photo stands the place it was taken, blurred where it meets the photo and coming into focus as the memory returns. Everything else runs on one laptop.
 
 ## What you need
 
@@ -85,7 +85,9 @@ export ANTHROPIC_API_KEY="your key"     # this terminal only
 npm start
 ```
 
-Set it with `export` in the one Git Bash window that runs the server, and never start Claude Code from that window. Without a key the studio still works: you place the spots yourself and each one asks "What do you remember here?". The server caps analyses at 150 per run and 6 per minute (`UNFADE_MAX_ANALYSES` changes the first), and remembers answers for photos it has already seen. `UNFADE_MODEL` picks the model, `claude-sonnet-5-5` by default.
+Set it with `export` in the one Git Bash window that runs the server, and never start Claude Code from that window. Without a key the studio still works: you place the spots yourself and each one asks "What do you remember here?". The server caps analyses at 150 per run and 6 per minute (`UNFADE_MAX_ANALYSES` changes the first), and remembers answers for photos it has already seen. `UNFADE_MODEL` picks the model, `claude-opus-5-5` by default; `claude-sonnet-5-5` answers faster for half the price.
+
+Every memory stands in a place: its own `env.jpg` if it has one, otherwise one of fifteen 360 panoramas picked from the light, the sounds and the scale the studio settled on. With `WORLDLABS_API_KEY` exported in the same window, the studio also offers to build a 3D world around the photo with World Labs Marble (about five minutes and $1.26 a world, at most 8 a run), and `node server/worldlabs.js --samples` builds the samples' worlds. Worlds are kept in `data/`, so they stay on the laptop that built them.
 
 ## Using it
 
@@ -127,6 +129,7 @@ We built Unfade with Claude Code, each of us in our own part. `.agent/` holds th
 ## Credits
 
 - Sample photos: "Coffee cup" by Rachel Michetti (CC0), "Chelsea the cat" by Stéfan van der Walt (CC0), both from the scikit-image sample data; the Falcon 9 and DSCOVR launch photo by SpaceX, released into the public domain.
+- The 360 panoramas around the memories come from Poly Haven (CC0); public/environments/CREDITS.md lists each one and its authors.
 - Depth Anything V2 Small (Apache-2.0), in the ONNX export by onnx-community on Hugging Face.
 - three.js, onnxruntime-web, ws and Vite (MIT).
 - Young Serif, Caveat and IBM Plex Mono under the SIL Open Font License 1.1 (licence texts in public/fonts/).
