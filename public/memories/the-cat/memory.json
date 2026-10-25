@@ -1,24 +1,24 @@
 {
   "spec": 1,
   "id": "the-cat",
-  "title": "The proposal",
+  "title": "The cat",
   "when": "",
   "where": "",
   "createdAt": "2026-10-24T06:00:00.000Z",
   "photo": {
     "src": "photo.jpg",
-    "width": 1200,
-    "height": 1200
+    "width": 451,
+    "height": 300
   },
   "thumb": {
     "src": "thumb.jpg",
-    "width": 300,
+    "width": 451,
     "height": 300
   },
   "depth": {
     "src": "depth.png",
     "width": 518,
-    "height": 518,
+    "height": 350,
     "encoding": "rg16-disparity"
   },
   "camera": {
@@ -26,47 +26,47 @@
     "focal35mm": null
   },
   "scene": {
-    "scale": "landscape",
-    "light": "golden",
-    "particles": "petals",
+    "scale": "closeup",
+    "light": "warm_indoor",
+    "particles": "dust",
     "soundLayers": [
-      "wind",
-      "waves"
+      "room_tone",
+      "birds"
     ]
   },
   "palette": [
-    "#D4956B",
-    "#E8B88A",
-    "#5C6B4A",
-    "#F2C8A0",
-    "#2E3828"
+    "#916a4c",
+    "#a58068",
+    "#7a5235",
+    "#b79d94",
+    "#4d2f1a"
   ],
   "anchors": [
     {
       "id": "a1",
-      "x": 0.42,
-      "y": 0.52,
-      "label": "the moment",
-      "question": "What were you feeling right then?",
+      "x": 0.3814,
+      "y": 0.3867,
+      "label": "the eyes",
+      "question": "What did you call this cat?",
       "sound": "none",
       "note": ""
     },
     {
       "id": "a2",
-      "x": 0.65,
-      "y": 0.15,
-      "label": "the sunset",
-      "question": "What did you say first?",
-      "sound": "waves",
+      "x": 0.5809,
+      "y": 0.81,
+      "label": "the nose",
+      "question": "Where did it like to sleep?",
+      "sound": "none",
       "note": ""
     },
     {
       "id": "a3",
-      "x": 0.25,
-      "y": 0.75,
-      "label": "the flowers",
-      "question": "Who helped set this up?",
-      "sound": "none",
+      "x": 0.9202,
+      "y": 0.5,
+      "label": "the room behind",
+      "question": "Who else was home that day?",
+      "sound": "birds",
       "note": ""
     }
   ],
