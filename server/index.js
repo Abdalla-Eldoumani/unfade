@@ -5,10 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { MSG, envelope } from '../src/shared/contract.js';
+import { MSG, envelope, isMemoryId } from '../src/shared/contract.js';
 import { MODEL, analyzeWithClaude, fallbackAnalysis, hasKey } from './claude.js';
 import { Rooms } from './rooms.js';
 import { Store } from './store.js';
+import { WORLD_MODEL, Worlds, hasWorldKey } from './worldlabs.js';
 
 // The only backend: serves the built app, runs /api, relays rooms on /ws.
 //   npm run server   dev mode: http://localhost:8787, API and rooms only (Vite serves the pages)
@@ -24,6 +25,22 @@ const store = new Store({
   bundledDir: dev ? path.join(root, 'public', 'memories') : path.join(distDir, 'memories'),
 });
 const rooms = new Rooms();
+
+// A saved memory keeps its world beside it (removed with it); a bundled
+// sample's world lives in data/worlds/<id>/, since public/ is never written.
+const memoryPhoto = (id) => {
+  if (!isMemoryId(id)) return null;
+  const saved = path.join(store.dir, id, 'photo.jpg');
+  if (fs.existsSync(saved)) return { photo: saved, dir: path.join(store.dir, id, 'world') };
+  const bundled = path.join(store.bundledDir, id, 'photo.jpg');
+  if (fs.existsSync(bundled)) return { photo: bundled, dir: path.join(root, 'data', 'worlds', id) };
+  return null;
+};
+const worlds = new Worlds({
+  dataDir: path.join(root, 'data'),
+  dirFor: async (id) => memoryPhoto(id)?.dir ?? null,
+  photoFor: async (id) => memoryPhoto(id)?.photo ?? null,
+});
 
 // Spending guard: every analysis costs money, so cap it per run and per minute.
 const MAX_ANALYSES = Number(process.env.UNFADE_MAX_ANALYSES) || 150;
@@ -48,6 +65,8 @@ const TYPES = {
   '.woff2': 'font/woff2',
   '.wasm': 'application/wasm',
   '.onnx': 'application/octet-stream',
+  '.spz': 'application/octet-stream',
+  '.glb': 'model/gltf-binary',
   '.txt': 'text/plain; charset=utf-8',
 };
 
@@ -148,10 +167,23 @@ async function handle(req, res) {
         analysesLeft: Math.max(0, MAX_ANALYSES - analysesUsed),
         rooms: rooms.summary(),
         lan: lanAddresses(),
+        worlds: hasWorldKey(),
+        worldModel: WORLD_MODEL,
+        worldsLeft: worlds.left,
       });
     }
     if (pathname === '/api/memories' && req.method === 'GET') {
-      return json(res, 200, { memories: await store.all() });
+      const memories = await store.all();
+      for (const m of memories) m.spec = { ...m.spec, world: await worlds.ready(m.spec.id) };
+      return json(res, 200, { memories });
+    }
+    const world = /^\/api\/world\/([a-z0-9-]+)$/.exec(pathname);
+    if (world && req.method === 'POST') return json(res, 202, await worlds.start(world[1]));
+    if (world && req.method === 'GET') return json(res, 200, await worlds.status(world[1]));
+    const worldFile = /^\/api\/world\/([a-z0-9-]+)\/file\/([a-z0-9._-]+)$/.exec(pathname);
+    if (worldFile && req.method === 'GET') {
+      const file = await worlds.file(worldFile[1], worldFile[2]);
+      return file ? sendFile(res, file) : json(res, 404, { error: 'not found' });
     }
     if (pathname === '/api/memories' && req.method === 'POST') {
       const body = await readJson(req, 15e6);
